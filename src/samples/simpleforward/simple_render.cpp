@@ -133,7 +133,7 @@ void SimpleRender::SetupSimplePipeline()
   if(m_pBindings == nullptr)
     m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 1);
 
-  m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT);
+  m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
   m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
   m_pBindings->BindEnd(&m_dSet, &m_dSetLayout);
 
@@ -195,6 +195,27 @@ void SimpleRender::UpdateUniformBuffer(float a_time)
 {
 // most uniforms are updated in GUI -> SetupGUIElements()
   m_uniforms.time = a_time;
+
+  float xOffset = -9.f;
+  float yOffset = 9.f;
+
+  float scale = 0.5;
+  mat4 scaleMatrix = mat4();
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      scaleMatrix[i][j] *= scale;
+    }
+  }
+
+  for (int x = 0; x < 30; ++x) { 
+    if( x > 0 && x % 5 == 0) {
+      xOffset = -9.f;
+      yOffset -= 3.0f;
+    }
+    m_uniforms.modelMatrix[x] = LiteMath::translate4x4(vec3(xOffset, yOffset, 0)) * scaleMatrix;
+    xOffset += 22.f / 5.f;
+  }
+
   memcpy(m_uboMappedMem, &m_uniforms, sizeof(m_uniforms));
 }
 
@@ -242,17 +263,26 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
     vkCmdBindVertexBuffers(a_cmdBuff, 0, 1, &vertexBuf, &zero_offset);
     vkCmdBindIndexBuffer(a_cmdBuff, indexBuf, 0, VK_INDEX_TYPE_UINT32);
 
-    for (uint32_t i = 0; i < m_pScnMgr->InstancesNum(); ++i)
-    {
-      auto inst = m_pScnMgr->GetInstanceInfo(i);
+    // for (size_t i = 0; i < m_pScnMgr->InstancesNum(); ++i)
+    // {
+    //   auto inst = m_pScnMgr->GetInstanceInfo(i);
 
-      pushConst2M.model = m_pScnMgr->GetInstanceMatrix(i);
-      vkCmdPushConstants(a_cmdBuff, m_basicForwardPipeline.layout, stageFlags, 0,
-                         sizeof(pushConst2M), &pushConst2M);
+    //   pushConst2M.model = m_pScnMgr->GetInstanceMatrix(i);
+    //   vkCmdPushConstants(a_cmdBuff, m_basicForwardPipeline.layout, stageFlags, 0,
+    //                      sizeof(pushConst2M), &pushConst2M);
 
-      auto mesh_info = m_pScnMgr->GetMeshInfo(inst.mesh_id);
-      vkCmdDrawIndexed(a_cmdBuff, mesh_info.m_indNum, 1, mesh_info.m_indexOffset, mesh_info.m_vertexOffset, 0);
-    }
+    //   auto mesh_info = m_pScnMgr->GetMeshInfo(inst.mesh_id);
+    //   vkCmdDrawIndexed(a_cmdBuff, mesh_info.m_indNum, 10, mesh_info.m_indexOffset, mesh_info.m_vertexOffset, 0);
+    // }
+
+    int i = 1;
+    auto inst = m_pScnMgr->GetInstanceInfo(i);
+
+    vkCmdPushConstants(a_cmdBuff, m_basicForwardPipeline.layout, stageFlags, 0,
+                        sizeof(pushConst2M), &pushConst2M);
+
+    auto mesh_info = m_pScnMgr->GetMeshInfo(inst.mesh_id);
+    vkCmdDrawIndexed(a_cmdBuff, mesh_info.m_indNum, 30, mesh_info.m_indexOffset, mesh_info.m_vertexOffset, 0);
 
     vkCmdEndRenderPass(a_cmdBuff);
   }
