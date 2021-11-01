@@ -128,7 +128,7 @@ void SimpleRender::SetupSimplePipeline()
 {
   std::vector<std::pair<VkDescriptorType, uint32_t> > dtypes = {
       {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,             1},
-      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,             2}
+      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,             3}
   };
 
   if(m_pBindings == nullptr)
@@ -136,11 +136,13 @@ void SimpleRender::SetupSimplePipeline()
 
   m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
   m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+  m_pBindings->BindBuffer(1, m_instanceIndecesBuffer, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
   m_pBindings->BindEnd(&m_dSet, &m_dSetLayout);
 
   m_pBindings->BindBegin(VK_SHADER_STAGE_COMPUTE_BIT);
   m_pBindings->BindBuffer(0, m_pScnMgr->GetBboxBuffer(), VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
   m_pBindings->BindBuffer(1, m_instanceIndecesBuffer, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+  m_pBindings->BindBuffer(2, m_inderectionBuffer, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
   m_pBindings->BindEnd(&m_dCompSet, &m_dCompSetLayout);
 
   // if we are recreating pipeline (for example, to reload shaders)
@@ -197,6 +199,11 @@ void SimpleRender::CreateUniformBuffer()
   UpdateUniformBuffer(0.0f);
 }
 
+void SimpleRender::CreatmInderectionBuffer() {
+  m_inderectionBuffer = vk_utils::createBuffer(m_device, sizeof(IndirectCall), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+  vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice, {m_inderectionBuffer}, 0);
+}
+
 void SimpleRender::CreateInstanceIndecesBuffer() {
    m_instanceIndecesBuffer = vk_utils::createBuffer(m_device, sizeof(int) * INSTANCE_NUM, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
    vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice, {m_instanceIndecesBuffer}, 0);
@@ -212,7 +219,7 @@ void SimpleRender::UpdateUniformBuffer(float a_time)
 
   float scale = 0.5;
   mat4 scaleMatrix = LiteMath::scale4x4(vec3(scale));
-  mat4 rotateMatrix = LiteMath::rotate4x4Z(a_time / 20.f);
+  mat4 rotateMatrix = LiteMath::rotate4x4Y(a_time / 20.f);
   Box4f bbox = m_pScnMgr->GetMeshBbox(1);
   std::vector<float4> corners; 
   for (int x = 0; x < 30; ++x) { 
@@ -296,6 +303,28 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
     vkCmdDispatch(a_cmdBuff, 1, 1, 1);
   }
 
+  VkBufferMemoryBarrier barrier1 = {};
+  barrier1.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+  barrier1.pNext = nullptr;
+  barrier1.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+  barrier1.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+  barrier1.buffer = m_instanceIndecesBuffer;
+  barrier1.offset = 0;
+  barrier1.size = VK_WHOLE_SIZE;
+
+  VkBufferMemoryBarrier barrier2 = {};
+  barrier2.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+  barrier2.pNext = nullptr;
+  barrier2.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+  barrier2.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+  barrier2.buffer = m_inderectionBuffer;
+  barrier2.offset = 0;
+  barrier2.size = VK_WHOLE_SIZE;
+
+
+  VkBufferMemoryBarrier barriers[2]{barrier1, barrier2};
+  vkCmdPipelineBarrier(a_cmdBuff, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, {}, 0, nullptr, 1, barriers, 0, nullptr);
+
   
   vk_utils::setDefaultViewport(a_cmdBuff, static_cast<float>(m_width), static_cast<float>(m_height));
   vk_utils::setDefaultScissor(a_cmdBuff, m_width, m_height);
@@ -330,26 +359,16 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
     vkCmdBindVertexBuffers(a_cmdBuff, 0, 1, &vertexBuf, &zero_offset);
     vkCmdBindIndexBuffer(a_cmdBuff, indexBuf, 0, VK_INDEX_TYPE_UINT32);
 
-    // for (size_t i = 0; i < m_pScnMgr->InstancesNum(); ++i)
-    // {
-    //   auto inst = m_pScnMgr->GetInstanceInfo(i);
-
-    //   pushConst2M.model = m_pScnMgr->GetInstanceMatrix(i);
-    //   vkCmdPushConstants(a_cmdBuff, m_basicForwardPipeline.layout, stageFlags, 0,
-    //                      sizeof(pushConst2M), &pushConst2M);
-
-    //   auto mesh_info = m_pScnMgr->GetMeshInfo(inst.mesh_id);
-    //   vkCmdDrawIndexed(a_cmdBuff, mesh_info.m_indNum, 10, mesh_info.m_indexOffset, mesh_info.m_vertexOffset, 0);
-    // }
-
     int i = 1;
     auto inst = m_pScnMgr->GetInstanceInfo(i);
     vkCmdPushConstants(a_cmdBuff, m_basicForwardPipeline.layout, stageFlags, 0,
                         sizeof(pushConst2M), &pushConst2M);
 
     auto mesh_info = m_pScnMgr->GetMeshInfo(inst.mesh_id);
-    pushConst2M.vertexCount = mesh_info.m_indNum;
-    vkCmdDrawIndexed(a_cmdBuff, mesh_info.m_indNum, 30, mesh_info.m_indexOffset, mesh_info.m_vertexOffset, 0);
+    pushConst2M.indexCount = mesh_info.m_indNum;
+    pushConst2M.vertexOffset = mesh_info.m_vertexOffset;
+    pushConst2M.firstIndex = mesh_info.m_indexOffset;
+    vkCmdDrawIndexedIndirect(a_cmdBuff, m_inderectionBuffer, 0, 1, 0);
 
     vkCmdEndRenderPass(a_cmdBuff);
   }
@@ -568,6 +587,7 @@ void SimpleRender::LoadScene(const char* path, bool transpose_inst_matrices)
 
   CreateUniformBuffer();
   CreateInstanceIndecesBuffer();
+  CreatmInderectionBuffer();
 
   SetupSimplePipeline();
   CreateComputePipeline();

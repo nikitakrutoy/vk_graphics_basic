@@ -19,6 +19,11 @@ layout (binding = 0) uniform AppData
     UniformParams Params;
 };
 
+layout(std430, binding = 1) buffer InstanceIndeces 
+{
+    uint instanceIndeces[];
+};
+
 
 layout (location = 0 ) out VS_OUT
 {
@@ -36,9 +41,9 @@ void main(void)
     const vec4 wNorm = vec4(DecodeNormal(floatBitsToInt(vPosNorm.w)),         0.0f);
     const vec4 wTang = vec4(DecodeNormal(floatBitsToInt(vTexCoordAndTang.z)), 0.0f);
 
-    vOut.wPos     = (Params.modelMatrix[gl_InstanceIndex] * vec4(vPosNorm.xyz, 1.0f)).xyz;
-    vOut.wNorm    = mat3(transpose(inverse(Params.modelMatrix[gl_InstanceIndex]))) * wNorm.xyz;
-    vOut.wTangent = mat3(transpose(inverse(Params.modelMatrix[gl_InstanceIndex]))) * wTang.xyz;
+    vOut.wPos     = (Params.modelMatrix[instanceIndeces[gl_InstanceIndex]] * vec4(vPosNorm.xyz, 1.0f)).xyz;
+    vOut.wNorm    = mat3(transpose(inverse(Params.modelMatrix[instanceIndeces[gl_InstanceIndex]]))) * wNorm.xyz;
+    vOut.wTangent = mat3(transpose(inverse(Params.modelMatrix[instanceIndeces[gl_InstanceIndex]]))) * wTang.xyz;
     vOut.texCoord = vTexCoordAndTang.xy;
 
     gl_Position   = params.mProjView * vec4(vOut.wPos, 1.0);

@@ -8,7 +8,9 @@ layout( local_size_x = INSTANCE_NUM ) in;
 layout(push_constant) uniform params_t
 {
     mat4 mProjView;
-    int vertexCount;
+    uint indexCount;
+    uint firstIndex;
+    int vertexOffset;
 } params;
 
 layout(std430, binding = 0) buffer BboxBuf 
@@ -19,6 +21,11 @@ layout(std430, binding = 0) buffer BboxBuf
 layout(std430, binding = 1) buffer InstanceIndeces 
 {
     uint instanceIndeces[];
+};
+
+layout(std430, binding = 2) buffer indirectionBuffer
+{
+    IndirectCall indirection[];
 };
 
 shared uint counter;
@@ -45,8 +52,16 @@ void main()
     vec4 maxPointProj = params.mProjView * maxPointWorld;
     minPointProj = minPointProj / minPointProj.w;
     maxPointProj = maxPointProj / maxPointProj.w;
-    if (isPointInsideFrustrum(minPointProj) && isPointInsideFrustrum(maxPointProj)) {
+    if (isPointInsideFrustrum(minPointProj) || isPointInsideFrustrum(maxPointProj)) {
         uint i = atomicAdd(counter, 1);
         instanceIndeces[i] = idx;
+    }
+    barrier();
+    if(idx == 0) {
+        indirection[0].indexCount = params.indexCount;
+        indirection[0].instanceCount = counter;
+        indirection[0].firstIndex = params.firstIndex;
+        indirection[0].vertexOffset = params.vertexOffset;
+        indirection[0].firstInstance = 0;
     }
 }

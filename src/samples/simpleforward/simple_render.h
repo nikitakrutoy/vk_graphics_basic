@@ -90,13 +90,17 @@ protected:
   struct
   {
     LiteMath::float4x4 projView;
-    uint32_t vertexCount;
+    uint32_t indexCount;
+    uint32_t firstIndex;
+    int vertexOffset;
   } pushConst2M;
 
   UniformParams m_uniforms {};
   VkBuffer m_ubo = VK_NULL_HANDLE;
   VkBuffer m_instanceIndecesBuffer;
+  VkBuffer m_inderectionBuffer;
   VkDeviceMemory m_uboAlloc = VK_NULL_HANDLE;
+  VkDeviceMemory m_indAlloc = VK_NULL_HANDLE;
   void* m_uboMappedMem = nullptr;
 
   pipeline_data_t m_basicForwardPipeline {};
@@ -156,6 +160,7 @@ protected:
   void RecreateSwapChain();
 
   void CreateInstanceIndecesBuffer();
+  void CreatmInderectionBuffer();
 
   void CreateUniformBuffer();
   void UpdateUniformBuffer(float a_time);
