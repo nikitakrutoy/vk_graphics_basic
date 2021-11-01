@@ -1,7 +1,7 @@
 #ifndef VK_GRAPHICS_BASIC_COMMON_H
 #define VK_GRAPHICS_BASIC_COMMON_H
 
-#define INSTANCE_NUM 30
+#define INSTANCE_NUM 200
 
 #ifdef __cplusplus
 #include <LiteMath.h>

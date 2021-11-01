@@ -214,24 +214,27 @@ void SimpleRender::UpdateUniformBuffer(float a_time)
 // most uniforms are updated in GUI -> SetupGUIElements()
   m_uniforms.time = a_time;
 
-  float xOffset = -9.f;
-  float yOffset = 9.f;
+  int width = INSTANCE_NUM / 10;
+  int height = width;
+  int step = 2.f;
+  float xOffset = -(width / 2);
+  float yOffset = (height / 2);
 
   float scale = 0.5;
   mat4 scaleMatrix = LiteMath::scale4x4(vec3(scale));
   mat4 rotateMatrix = LiteMath::rotate4x4Y(a_time / 5.f);
   Box4f bbox = m_pScnMgr->GetMeshBbox(1);
   std::vector<float4> corners; 
-  for (int x = 0; x < 30; ++x) { 
-    if( x > 0 && x % 5 == 0) {
-      xOffset = -9.f;
-      yOffset -= 3.0f;
+  for (int x = 0; x < INSTANCE_NUM; ++x) { 
+    if( x > 0 && x % (width / step) == 0) {
+      xOffset = -(width / 2);
+      yOffset -= step;
     }
     float4x4 model = LiteMath::translate4x4(vec3(xOffset, yOffset, 0)) * rotateMatrix * scaleMatrix;
     m_uniforms.modelMatrix[x] = model;
     corners.push_back(model * bbox.boxMin);
     corners.push_back(model * bbox.boxMax);
-    xOffset += 22.f / 5.f;
+    xOffset += step;
   }
 
   m_pScnMgr->GetCopyHelper()->UpdateBuffer(m_pScnMgr->GetBboxBuffer(),  0, corners.data(), sizeof(float4) * INSTANCE_NUM * 2);
