@@ -100,7 +100,8 @@ protected:
   VkBuffer m_instanceIndecesBuffer;
   VkBuffer m_inderectionBuffer;
   VkDeviceMemory m_uboAlloc = VK_NULL_HANDLE;
-  VkDeviceMemory m_indAlloc = VK_NULL_HANDLE;
+  VkDeviceMemory m_indecesAlloc = VK_NULL_HANDLE;
+  VkDeviceMemory m_indirectAlloc = VK_NULL_HANDLE;
   void* m_uboMappedMem = nullptr;
 
   pipeline_data_t m_basicForwardPipeline {};

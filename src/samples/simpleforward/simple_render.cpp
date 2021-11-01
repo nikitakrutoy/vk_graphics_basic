@@ -201,12 +201,12 @@ void SimpleRender::CreateUniformBuffer()
 
 void SimpleRender::CreatmInderectionBuffer() {
   m_inderectionBuffer = vk_utils::createBuffer(m_device, sizeof(IndirectCall), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
-  vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice, {m_inderectionBuffer}, 0);
+  m_indirectAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice, {m_inderectionBuffer}, 0);
 }
 
 void SimpleRender::CreateInstanceIndecesBuffer() {
-   m_instanceIndecesBuffer = vk_utils::createBuffer(m_device, sizeof(int) * INSTANCE_NUM, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-   vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice, {m_instanceIndecesBuffer}, 0);
+  m_instanceIndecesBuffer = vk_utils::createBuffer(m_device, sizeof(int) * INSTANCE_NUM, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+  m_indecesAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice, {m_instanceIndecesBuffer}, 0);
 }
 
 void SimpleRender::UpdateUniformBuffer(float a_time)
@@ -219,7 +219,7 @@ void SimpleRender::UpdateUniformBuffer(float a_time)
 
   float scale = 0.5;
   mat4 scaleMatrix = LiteMath::scale4x4(vec3(scale));
-  mat4 rotateMatrix = LiteMath::rotate4x4Y(a_time / 20.f);
+  mat4 rotateMatrix = LiteMath::rotate4x4Y(a_time / 5.f);
   Box4f bbox = m_pScnMgr->GetMeshBbox(1);
   std::vector<float4> corners; 
   for (int x = 0; x < 30; ++x) { 
@@ -467,6 +467,17 @@ void SimpleRender::Cleanup()
     m_surface = VK_NULL_HANDLE;
   }
 
+  if (m_compPipeline != VK_NULL_HANDLE)
+  {
+    vkDestroyPipeline(m_device, m_compPipeline, nullptr);
+    m_compPipeline = VK_NULL_HANDLE;
+  }
+  if (m_compPipelineLayout != VK_NULL_HANDLE)
+  {
+    vkDestroyPipelineLayout(m_device, m_compPipelineLayout, nullptr);
+    m_compPipelineLayout = VK_NULL_HANDLE;
+  }
+
   if (m_basicForwardPipeline.pipeline != VK_NULL_HANDLE)
   {
     vkDestroyPipeline(m_device, m_basicForwardPipeline.pipeline, nullptr);
@@ -505,6 +516,32 @@ void SimpleRender::Cleanup()
   {
     vkFreeMemory(m_device, m_uboAlloc, nullptr);
     m_uboAlloc = VK_NULL_HANDLE;
+  }
+
+  
+  if(m_instanceIndecesBuffer != VK_NULL_HANDLE)
+  {
+    vkDestroyBuffer(m_device, m_instanceIndecesBuffer, nullptr);
+    m_instanceIndecesBuffer = VK_NULL_HANDLE;
+  }
+
+    
+  if(m_inderectionBuffer != VK_NULL_HANDLE)
+  {
+    vkDestroyBuffer(m_device, m_inderectionBuffer, nullptr);
+    m_inderectionBuffer = VK_NULL_HANDLE;
+  }
+
+  if(m_indecesAlloc != VK_NULL_HANDLE)
+  {
+    vkFreeMemory(m_device, m_indecesAlloc, nullptr);
+    m_indecesAlloc = VK_NULL_HANDLE;
+  }
+
+    if(m_indirectAlloc != VK_NULL_HANDLE)
+  {
+    vkFreeMemory(m_device, m_indirectAlloc, nullptr);
+    m_indirectAlloc = VK_NULL_HANDLE;
   }
 
 //  vk_utils::deleteImg(m_device, &m_depthBuffer); // already deleted with swapchain

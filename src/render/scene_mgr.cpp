@@ -266,10 +266,16 @@ void SceneManager::DestroyScene()
     m_meshInfoBuf = VK_NULL_HANDLE;
   }
 
-  if(m_instanceMatricesBuffer != VK_NULL_HANDLE)
+  if(m_meshInfoBuf != VK_NULL_HANDLE)
   {
-    vkDestroyBuffer(m_device, m_instanceMatricesBuffer, nullptr);
-    m_instanceMatricesBuffer = VK_NULL_HANDLE;
+    vkDestroyBuffer(m_device, m_meshInfoBuf, nullptr);
+    m_meshInfoBuf = VK_NULL_HANDLE;
+  }
+
+  if(m_instanceBboxBuffer != VK_NULL_HANDLE)
+  {
+    vkDestroyBuffer(m_device, m_instanceBboxBuffer, nullptr);
+    m_instanceBboxBuffer = VK_NULL_HANDLE;
   }
 
   if(m_geoMemAlloc != VK_NULL_HANDLE)
