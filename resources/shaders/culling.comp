@@ -1,0 +1,52 @@
+#version 430
+#extension GL_GOOGLE_include_directive : require
+
+#include "common.h"
+
+layout( local_size_x = INSTANCE_NUM ) in;
+
+layout(push_constant) uniform params_t
+{
+    mat4 mProjView;
+    int vertexCount;
+} params;
+
+layout(std430, binding = 0) buffer BboxBuf 
+{
+    vec4 bboxBuf[];
+};
+
+layout(std430, binding = 1) buffer InstanceIndeces 
+{
+    uint instanceIndeces[];
+};
+
+shared uint counter;
+
+vec4 frustrumMin = vec4(-1, -1, 0, 1);
+vec4 frustrumMax = vec4(1, 1, 1, 1);
+bool isPointInsideFrustrum(vec4 point) {
+  return (point.x >= frustrumMin.x && point.x <= frustrumMax.x) &&
+         (point.y >= frustrumMin.y && point.y <= frustrumMax.y) &&
+         (point.z >= frustrumMin.z && point.z <= frustrumMax.z);
+}
+
+void main() 
+{
+    uint idx = gl_GlobalInvocationID.x;
+    instanceIndeces[idx] = INSTANCE_NUM;
+    if (idx == 0) {
+        counter = 0;
+    }
+    barrier();
+    vec4 minPointWorld = bboxBuf[2 * idx];
+    vec4 maxPointWorld = bboxBuf[2 * idx + 1];
+    vec4 minPointProj = params.mProjView * minPointWorld;
+    vec4 maxPointProj = params.mProjView * maxPointWorld;
+    minPointProj = minPointProj / minPointProj.w;
+    maxPointProj = maxPointProj / maxPointProj.w;
+    if (isPointInsideFrustrum(minPointProj) && isPointInsideFrustrum(maxPointProj)) {
+        uint i = atomicAdd(counter, 1);
+        instanceIndeces[i] = idx;
+    }
+}

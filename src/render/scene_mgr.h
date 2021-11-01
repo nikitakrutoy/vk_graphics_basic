@@ -44,6 +44,7 @@ struct SceneManager
   VkBuffer GetVertexBuffer() const { return m_geoVertBuf; }
   VkBuffer GetIndexBuffer()  const { return m_geoIdxBuf; }
   VkBuffer GetMeshInfoBuffer()  const { return m_meshInfoBuf; }
+  VkBuffer GetBboxBuffer()  const { return m_instanceBboxBuffer; }
   std::shared_ptr<vk_utils::ICopyEngine> GetCopyHelper() { return  m_pCopyHelper; }
 
   uint32_t MeshesNum() const {return (uint32_t)m_meshInfos.size();}
@@ -77,6 +78,7 @@ private:
   VkBuffer m_geoVertBuf = VK_NULL_HANDLE;
   VkBuffer m_geoIdxBuf  = VK_NULL_HANDLE;
   VkBuffer m_meshInfoBuf  = VK_NULL_HANDLE;
+  VkBuffer m_instanceBboxBuffer = VK_NULL_HANDLE;
   VkBuffer m_instanceMatricesBuffer = VK_NULL_HANDLE;
   VkDeviceMemory m_geoMemAlloc = VK_NULL_HANDLE;
 

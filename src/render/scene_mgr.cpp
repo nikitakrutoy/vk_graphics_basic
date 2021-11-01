@@ -191,7 +191,7 @@ uint32_t SceneManager::InstanceMesh(const uint32_t meshId, const LiteMath::float
       (i & 4) == 0 ? m_meshBboxes[meshId].boxMin.z : m_meshBboxes[meshId].boxMax.z,
       1
     );
-    instBox.include(matrix * corner);
+    instBox.include(corner);
   }
   sceneBbox.include(instBox);
   m_instanceBboxes.push_back(instBox);
@@ -216,14 +216,18 @@ void SceneManager::LoadGeoDataOnGPU()
   VkDeviceSize vertexBufSize = m_pMeshData->VertexDataSize();
   VkDeviceSize indexBufSize  = m_pMeshData->IndexDataSize();
   VkDeviceSize infoBufSize   = m_meshInfos.size() * sizeof(uint32_t) * 2;
+  VkDeviceSize bboxBufSize = sizeof(float4) * INSTANCE_NUM * 2;
 
   m_geoVertBuf  = vk_utils::createBuffer(m_device, vertexBufSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   m_geoIdxBuf   = vk_utils::createBuffer(m_device, indexBufSize,  VK_BUFFER_USAGE_INDEX_BUFFER_BIT  | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   m_meshInfoBuf = vk_utils::createBuffer(m_device, infoBufSize,   VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+  m_instanceBboxBuffer = vk_utils::createBuffer(m_device, bboxBufSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+
+  std::cout << bboxBufSize << " " << m_instanceBboxes.size() << " " << sizeof(Box4f) << std::endl;
 
   VkMemoryAllocateFlags allocFlags {};
 
-  m_geoMemAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physDevice, {m_geoVertBuf, m_geoIdxBuf, m_meshInfoBuf}, allocFlags);
+  m_geoMemAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physDevice, {m_geoVertBuf, m_geoIdxBuf, m_meshInfoBuf, m_instanceBboxBuffer}, allocFlags);
 
   std::vector<LiteMath::uint2> mesh_info_tmp;
   for(const auto& m : m_meshInfos)

@@ -20,6 +20,7 @@ class SimpleRender : public IRender
 public:
   const std::string VERTEX_SHADER_PATH = "../resources/shaders/simple.vert";
   const std::string FRAGMENT_SHADER_PATH = "../resources/shaders/simple.frag";
+  const std::string COMP_SHADER_PATH = "../resources/shaders/culling.comp";
 
   SimpleRender(uint32_t a_width, uint32_t a_height);
   ~SimpleRender()  { Cleanup(); };
@@ -89,17 +90,24 @@ protected:
   struct
   {
     LiteMath::float4x4 projView;
+    uint32_t vertexCount;
   } pushConst2M;
 
   UniformParams m_uniforms {};
   VkBuffer m_ubo = VK_NULL_HANDLE;
+  VkBuffer m_instanceIndecesBuffer;
   VkDeviceMemory m_uboAlloc = VK_NULL_HANDLE;
   void* m_uboMappedMem = nullptr;
 
   pipeline_data_t m_basicForwardPipeline {};
 
+  VkPipeline m_compPipeline;
+  VkPipelineLayout m_compPipelineLayout;
+
   VkDescriptorSet m_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_dSetLayout = VK_NULL_HANDLE;
+  VkDescriptorSet m_dCompSet = VK_NULL_HANDLE;
+  VkDescriptorSetLayout m_dCompSetLayout = VK_NULL_HANDLE;
   VkRenderPass m_screenRenderPass = VK_NULL_HANDLE; // main renderpass
 
   std::shared_ptr<vk_utils::DescriptorMaker> m_pBindings = nullptr;
@@ -140,9 +148,14 @@ protected:
   void BuildCommandBufferSimple(VkCommandBuffer cmdBuff, VkFramebuffer frameBuff,
                                 VkImageView a_targetImageView, VkPipeline a_pipeline);
 
+  void CreateComputePipeline();
+  void SetupComputePipeline();
+
   virtual void SetupSimplePipeline();
   void CleanupPipelineAndSwapchain();
   void RecreateSwapChain();
+
+  void CreateInstanceIndecesBuffer();
 
   void CreateUniformBuffer();
   void UpdateUniformBuffer(float a_time);
