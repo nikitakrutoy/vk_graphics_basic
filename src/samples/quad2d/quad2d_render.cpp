@@ -90,7 +90,7 @@ void Quad2D_Render::SetupQuadRenderer()
 {
   m_pFSQuad.reset();
   m_pFSQuad = std::make_shared<vk_utils::QuadRenderer>(0,0, 1024, 1024);
-  m_pFSQuad->Create(m_device, "../resources/shaders/quad3_vert.vert.spv", "../resources/shaders/my_quad.frag.spv", 
+  m_pFSQuad->Create(m_device, "../resources/shaders/quad3_vert.vert.spv", "../resources/shaders/median_filter.frag.spv", 
                     vk_utils::RenderTargetInfo2D{ VkExtent2D{ m_width, m_height }, m_swapchain.GetFormat(),                                        // this is debug full scree quad
                                                   VK_ATTACHMENT_LOAD_OP_LOAD, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR }); // seems we need LOAD_OP_LOAD if we want to draw quad to part of screen
 }
@@ -334,7 +334,7 @@ static std::vector<unsigned> LoadBMP(const char* filename, unsigned* pW, unsigne
 void Quad2D_Render::LoadScene(const char*, bool)
 {
   uint32_t texW, texH;
-  auto texData = LoadBMP("../resources/textures/texture1.bmp", &texW, &texH);
+  auto texData = LoadBMP("../resources/textures/lena_color.bmp", &texW, &texH);
   
   m_imageData    = vk_utils::allocateColorTextureFromDataLDR(m_device, m_physicalDevice, (const unsigned char*)texData.data(), texW, texH, 1, VK_FORMAT_R8G8B8A8_UNORM,
                                                              m_pCopyHelper, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
