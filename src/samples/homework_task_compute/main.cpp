@@ -1,10 +1,11 @@
 #include "scan_compute.h"
 #include "renderdoc_app.h"
+#include "../resources/shaders/common.h"
 #include <windows.h>
 
 int main()
 {
-    constexpr int LENGTH = 32;
+    constexpr int LENGTH = GRID_SIZE;
     constexpr int VULKAN_DEVICE_ID = 0;
 
     std::shared_ptr<ICompute> app = std::make_unique<ScanCompute>(LENGTH);
@@ -31,9 +32,9 @@ int main()
     app->Execute();
     // stop the capture
 
-    if (rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
-
-    std::cin.get();
+    if (rdoc_api) {
+        rdoc_api->EndFrameCapture(NULL, NULL);
+    }
 
     return 0;
 }

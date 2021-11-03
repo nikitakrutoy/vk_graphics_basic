@@ -4,6 +4,9 @@
 #include <vk_buffers.h>
 #include <vk_utils.h>
 
+#include <fstream>
+#include <stdio.h>
+
 ScanCompute::ScanCompute(uint32_t a_length) : m_length(a_length)
 {
 #ifdef NDEBUG
@@ -73,57 +76,44 @@ void ScanCompute::CreateDevice(uint32_t a_deviceId)
 void ScanCompute::SetupSimplePipeline()
 {
     std::vector<std::pair<VkDescriptorType, uint32_t> > dtypes = {
-        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,             8}
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,             3}
     };
 
     // Создание и аллокация буферов
 
-    //m_input = vk_utils::createBuffer(m_device, sizeof(float) * m_length * m_length, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-    //m_result = vk_utils::createBuffer(m_device, sizeof(float) * m_length * m_length, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)
-    //m_sums = vk_utils::createBuffer(m_device, sizeof(float) * m_length , VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)
-    m_A = vk_utils::createBuffer(m_device, sizeof(float) * m_length * m_length, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    m_input = vk_utils::createBuffer(m_device, sizeof(float) * m_length * m_length, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
     m_sum = vk_utils::createBuffer(m_device, sizeof(float) * m_length * m_length, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    m_B = vk_utils::createBuffer(m_device, sizeof(float) * m_length, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    m_C = vk_utils::createBuffer(m_device, sizeof(float) * m_length, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-    vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice, { m_A, m_sum, m_B, m_C }, 0);
+    m_tmp = vk_utils::createBuffer(m_device, sizeof(float) * m_length, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice, { m_input, m_sum, m_tmp }, 0);
 
     m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 3);
 
     // Создание descriptor set для передачи буферов в шейдер
     m_pBindings->BindBegin(VK_SHADER_STAGE_COMPUTE_BIT);
-    m_pBindings->BindBuffer(0, m_A);
+    m_pBindings->BindBuffer(0, m_input);
     m_pBindings->BindBuffer(1, m_sum);
-    m_pBindings->BindBuffer(2, m_B);
+    m_pBindings->BindBuffer(2, m_tmp);
     m_pBindings->BindEnd(&m_sumDS, &m_sumDSLayout);
 
     m_pBindings->BindBegin(VK_SHADER_STAGE_COMPUTE_BIT);
-    m_pBindings->BindBuffer(0, m_B);
-    m_pBindings->BindBuffer(1, m_C);
-    m_pBindings->BindBuffer(2, m_A);
+    m_pBindings->BindBuffer(0, m_tmp);
+    m_pBindings->BindBuffer(1, m_tmp);
+    m_pBindings->BindBuffer(2, m_input);
     m_pBindings->BindEnd(&m_sumDS2, &m_sumDSLayout);
 
 
     m_pBindings->BindBegin(VK_SHADER_STAGE_COMPUTE_BIT);
     m_pBindings->BindBuffer(0, m_sum);
-    m_pBindings->BindBuffer(1, m_C);
+    m_pBindings->BindBuffer(1, m_tmp);
     m_pBindings->BindEnd(&m_addDS, &m_addDSLayout);
     // Заполнение буферов
     std::vector<float> values(m_length * m_length);
     for (uint32_t i = 0; i < m_length; ++i) {
         for (uint32_t j = 0; j < m_length; ++j) {
-            values[i * m_length + j] = j + i;
+            values[i * m_length + j] = j + i + 1.f;
         }
     }
-    m_pCopyHelper->UpdateBuffer(m_A, 0, values.data(), sizeof(float) * values.size());
-
-
-    std::vector<float> valuesC(m_length);
-
-    for (uint32_t j = 0; j < m_length; ++j) {
-        valuesC[j] = 2;
-    }
-
-    m_pCopyHelper->UpdateBuffer(m_C, 0, valuesC.data(), sizeof(float) * valuesC.size());
+    m_pCopyHelper->UpdateBuffer(m_input, 0, values.data(), sizeof(float) * values.size());
 }
 
 void ScanCompute::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkPipeline a_pipeline)
@@ -147,7 +137,7 @@ void ScanCompute::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkPipeline
     barrier.pNext = nullptr;
     barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    barrier.buffer = m_B;
+    barrier.buffer = m_tmp;
     barrier.offset = 0;
     barrier.size = VK_WHOLE_SIZE;
     vkCmdPipelineBarrier(a_cmdBuff, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, {}, 0, nullptr, 1, &barrier, 0, nullptr);
@@ -161,7 +151,7 @@ void ScanCompute::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkPipeline
     barrier.pNext = nullptr;
     barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    barrier.buffer = m_C;
+    barrier.buffer = m_tmp;
     barrier.offset = 0;
     barrier.size = VK_WHOLE_SIZE;
     vkCmdPipelineBarrier(a_cmdBuff, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, {}, 0, nullptr, 1, &barrier2, 0, nullptr);
@@ -182,9 +172,8 @@ void ScanCompute::CleanupPipeline()
         vkFreeCommandBuffers(m_device, m_commandPool, 1, &m_cmdBufferCompute);
     }
 
-    vkDestroyBuffer(m_device, m_A, nullptr);
-    vkDestroyBuffer(m_device, m_B, nullptr);
-    vkDestroyBuffer(m_device, m_C, nullptr);
+    vkDestroyBuffer(m_device, m_input, nullptr);
+    vkDestroyBuffer(m_device, m_tmp, nullptr);
     vkDestroyBuffer(m_device, m_sum, nullptr);
 
     vkDestroyPipelineLayout(m_device, m_layout, nullptr);
@@ -270,38 +259,43 @@ void ScanCompute::Execute()
     VK_CHECK_RESULT(vkCreateFence(m_device, &fenceCreateInfo, NULL, &m_fence));
 
 
-    std::vector<float> values3(m_length);
-    m_pCopyHelper->ReadBuffer(m_C, 0, values3.data(), sizeof(float) * values3.size());
-    for (uint32_t j = 0; j < m_length; ++j) {
-        std::cout << values3[j] << " ";
-    }
-    std::cout << std::endl;
-
-
     // Отправляем буфер команд на выполнение
     VK_CHECK_RESULT(vkQueueSubmit(m_computeQueue, 1, &submitInfo, m_fence));
 
     //Ждём конца выполнения команд
     VK_CHECK_RESULT(vkWaitForFences(m_device, 1, &m_fence, VK_TRUE, 100000000000));
 
+    RunTest();
+
+}
+
+
+void ScanCompute::RunTest() {
+    std::ofstream result;
+    result.open("result");
+
+    result << std::fixed;
+    result << m_length << std::endl;
+
     std::vector<float> values(m_length * m_length);
     m_pCopyHelper->ReadBuffer(m_sum, 0, values.data(), sizeof(float) * values.size());
     for (uint32_t i = 0; i < m_length; ++i) {
         for (uint32_t j = 0; j < m_length; ++j) {
-            std::cout << values[i * m_length + j] << " ";
+            result << int(values[i * m_length + j]) << " ";
         }
-        std::cout << std::endl;
+        result << std::endl;
     }
 
-    std::vector<float> values2(m_length);
-    m_pCopyHelper->ReadBuffer(m_B, 0, values2.data(), sizeof(float) * values2.size());
-    for (uint32_t j = 0; j < m_length; ++j) {
-        std::cout << values2[j] << " ";
-    }
-    std::cout << std::endl;
-    m_pCopyHelper->ReadBuffer(m_C, 0, values3.data(), sizeof(float) * values3.size());
-    for (uint32_t j = 0; j < m_length; ++j) {
-        std::cout << values3[j] << " ";
-    }
-    std::cout << std::endl;
+    result.close();
+
+    #ifdef WIN32
+    int ret = std::system("python ../src/samples/homework_task_compute/test.py");
+    #else
+    int ret = std::system("python3 ../src/samples/homework_task_comput/test.py");
+    #endif
+    
+    if (ret == 0 && errno  != ENOENT)
+      std::cout << "Test passed!" << std::endl;
+    else
+      std::cout << "Test failed!" << std::endl;
 }

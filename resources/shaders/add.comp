@@ -1,8 +1,9 @@
 #version 430
+#extension GL_GOOGLE_include_directive : require
 
-#define BLOCK_SIZE 32
+#include "common.h"
 
-layout( local_size_x = BLOCK_SIZE ) in;
+layout( local_size_x = GRID_SIZE ) in;
 
 layout( push_constant ) uniform params {
   uint len;

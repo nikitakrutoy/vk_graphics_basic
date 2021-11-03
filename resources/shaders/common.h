@@ -1,6 +1,10 @@
 #ifndef VK_GRAPHICS_BASIC_COMMON_H
 #define VK_GRAPHICS_BASIC_COMMON_H
 
+
+#define GRID_SIZE 256
+#define HALF_GRID_SIZE 128
+
 #ifdef __cplusplus
 #include <LiteMath.h>
 using LiteMath::uint2;

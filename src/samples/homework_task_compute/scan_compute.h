@@ -78,7 +78,7 @@ private:
     VkPipelineLayout m_layout;
     VkPipelineLayout m_layout2;
 
-    VkBuffer m_A, m_B, m_C, m_sum;
+    VkBuffer m_input, m_tmp, m_sum;
 
     void CreateInstance();
     void CreateDevice(uint32_t a_deviceId);
@@ -92,6 +92,8 @@ private:
     void Cleanup();
 
     void SetupValidationLayers();
+
+    void RunTest();
 };
 
 
