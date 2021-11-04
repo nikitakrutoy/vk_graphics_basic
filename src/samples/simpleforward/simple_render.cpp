@@ -17,6 +17,7 @@ SimpleRender::SimpleRender(uint32_t a_width, uint32_t a_height) : m_width(a_widt
 void SimpleRender::SetupDeviceFeatures()
 {
   // m_enabledDeviceFeatures.fillModeNonSolid = VK_TRUE;
+  m_enabledDeviceFeatures.geometryShader = VK_TRUE;
 }
 
 void SimpleRender::SetupDeviceExtensions()
@@ -163,6 +164,20 @@ void SimpleRender::SetupSimplePipeline()
 
   m_basicForwardPipeline.pipeline = maker.MakePipeline(m_device, m_pScnMgr->GetPipelineVertexInputStateCreateInfo(),
                                                        m_screenRenderPass, {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR});
+
+  shader_paths[VK_SHADER_STAGE_FRAGMENT_BIT] = NORMAL_FRAGMENT_SHADER_PATH + ".spv";
+  shader_paths[VK_SHADER_STAGE_GEOMETRY_BIT] = NORMAL_GEOMETRY_SHADER_PATH + ".spv";
+  shader_paths[VK_SHADER_STAGE_VERTEX_BIT]   = VERTEX_SHADER_PATH + ".spv";
+
+  maker.LoadShaders(m_device, shader_paths);
+
+  m_normalForwardPipeline.layout = maker.MakeLayout(m_device, {}, sizeof(pushConst2M));
+  maker.SetDefaultState(m_width, m_height);
+
+  m_normalForwardPipeline.pipeline = maker.MakePipeline(m_device, m_pScnMgr->GetPipelineVertexInputStateCreateInfo(),
+                                                       m_screenRenderPass, {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR});
+
+                                                       
 }
 
 void SimpleRender::CreateUniformBuffer()
@@ -196,6 +211,20 @@ void SimpleRender::UpdateUniformBuffer(float a_time)
 // most uniforms are updated in GUI -> SetupGUIElements()
   m_uniforms.time = a_time;
   memcpy(m_uboMappedMem, &m_uniforms, sizeof(m_uniforms));
+}
+
+void SimpleRender::SimpleDrawCmd(VkCommandBuffer a_cmdBuff,  VkPipelineLayout a_layout, VkShaderStageFlags stageFlags) {
+    for (uint32_t i = 0; i < m_pScnMgr->InstancesNum(); ++i)
+    {
+      auto inst = m_pScnMgr->GetInstanceInfo(i);
+
+      pushConst2M.model = m_pScnMgr->GetInstanceMatrix(i);
+      vkCmdPushConstants(a_cmdBuff, a_layout, stageFlags, 0,
+                         sizeof(pushConst2M), &pushConst2M);
+
+      auto mesh_info = m_pScnMgr->GetMeshInfo(inst.mesh_id);
+      vkCmdDrawIndexed(a_cmdBuff, mesh_info.m_indNum, 1, mesh_info.m_indexOffset, mesh_info.m_vertexOffset, 0);
+    }
 }
 
 void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebuffer a_frameBuff,
@@ -242,16 +271,12 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
     vkCmdBindVertexBuffers(a_cmdBuff, 0, 1, &vertexBuf, &zero_offset);
     vkCmdBindIndexBuffer(a_cmdBuff, indexBuf, 0, VK_INDEX_TYPE_UINT32);
 
-    for (uint32_t i = 0; i < m_pScnMgr->InstancesNum(); ++i)
-    {
-      auto inst = m_pScnMgr->GetInstanceInfo(i);
+    SimpleDrawCmd(a_cmdBuff, m_basicForwardPipeline.layout, stageFlags);
 
-      pushConst2M.model = m_pScnMgr->GetInstanceMatrix(i);
-      vkCmdPushConstants(a_cmdBuff, m_basicForwardPipeline.layout, stageFlags, 0,
-                         sizeof(pushConst2M), &pushConst2M);
-
-      auto mesh_info = m_pScnMgr->GetMeshInfo(inst.mesh_id);
-      vkCmdDrawIndexed(a_cmdBuff, mesh_info.m_indNum, 1, mesh_info.m_indexOffset, mesh_info.m_vertexOffset, 0);
+    if (bDebugNormals) {
+      vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_normalForwardPipeline.pipeline);
+      stageFlags = (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT |  VK_SHADER_STAGE_FRAGMENT_BIT);
+      SimpleDrawCmd(a_cmdBuff, m_normalForwardPipeline.layout, stageFlags);
     }
 
     vkCmdEndRenderPass(a_cmdBuff);
@@ -359,6 +384,17 @@ void SimpleRender::Cleanup()
   if (m_basicForwardPipeline.layout != VK_NULL_HANDLE)
   {
     vkDestroyPipelineLayout(m_device, m_basicForwardPipeline.layout, nullptr);
+    m_basicForwardPipeline.layout = VK_NULL_HANDLE;
+  }
+
+  if (m_normalForwardPipeline.pipeline != VK_NULL_HANDLE)
+  {
+    vkDestroyPipeline(m_device, m_normalForwardPipeline.pipeline, nullptr);
+    m_basicForwardPipeline.pipeline = VK_NULL_HANDLE;
+  }
+  if (m_normalForwardPipeline.layout != VK_NULL_HANDLE)
+  {
+    vkDestroyPipelineLayout(m_device, m_normalForwardPipeline.layout, nullptr);
     m_basicForwardPipeline.layout = VK_NULL_HANDLE;
   }
 
@@ -539,9 +575,9 @@ void SimpleRender::DrawFrame(float a_time, DrawMode a_mode)
   switch (a_mode)
   {
   case DrawMode::WITH_GUI:
-    SetupGUIElements();
-    DrawFrameWithGUI();
-    break;
+    // SetupGUIElements();
+    // DrawFrameWithGUI();
+    // break;
   case DrawMode::NO_GUI:
     DrawFrameSimple();
     break;

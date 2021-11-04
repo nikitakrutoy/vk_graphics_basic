@@ -20,6 +20,10 @@ class SimpleRender : public IRender
 public:
   const std::string VERTEX_SHADER_PATH = "../resources/shaders/simple.vert";
   const std::string FRAGMENT_SHADER_PATH = "../resources/shaders/simple.frag";
+  const std::string NORMAL_GEOMETRY_SHADER_PATH = "../resources/shaders/normals.geom";
+  const std::string NORMAL_FRAGMENT_SHADER_PATH = "../resources/shaders/normals.frag";
+
+  bool bDebugNormals = false;
 
   SimpleRender(uint32_t a_width, uint32_t a_height);
   ~SimpleRender()  { Cleanup(); };
@@ -98,6 +102,7 @@ protected:
   void* m_uboMappedMem = nullptr;
 
   pipeline_data_t m_basicForwardPipeline {};
+  pipeline_data_t m_normalForwardPipeline {};
 
   VkDescriptorSet m_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_dSetLayout = VK_NULL_HANDLE;
@@ -140,6 +145,8 @@ protected:
 
   void BuildCommandBufferSimple(VkCommandBuffer cmdBuff, VkFramebuffer frameBuff,
                                 VkImageView a_targetImageView, VkPipeline a_pipeline);
+
+  void SimpleDrawCmd(VkCommandBuffer a_cmdBuff,  VkPipelineLayout a_layout, VkShaderStageFlags stageFlags);
 
   virtual void SetupSimplePipeline();
   void CleanupPipelineAndSwapchain();
