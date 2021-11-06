@@ -20,6 +20,9 @@ class SimpleRender : public IRender
 public:
   const std::string VERTEX_SHADER_PATH = "../resources/shaders/simple.vert";
   const std::string FRAGMENT_SHADER_PATH = "../resources/shaders/simple.frag";
+  const std::string EXPLODE_GEOMETRY_SHADER_PATH = "../resources/shaders/explode.geom";
+  const std::string EXPLODE_TESC_SHADER_PATH = "../resources/shaders/explode.tesc";
+  const std::string EXPLODE_TESE_SHADER_PATH = "../resources/shaders/explode.tese";
   const std::string NORMAL_GEOMETRY_SHADER_PATH = "../resources/shaders/normals.geom";
   const std::string NORMAL_FRAGMENT_SHADER_PATH = "../resources/shaders/normals.frag";
 

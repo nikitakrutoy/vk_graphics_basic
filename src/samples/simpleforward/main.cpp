@@ -30,7 +30,7 @@ int main()
   constexpr int HEIGHT = 1024;
   constexpr int VULKAN_DEVICE_ID = 0;
 
-  std::shared_ptr<IRender> app = CreateRender(WIDTH, HEIGHT, RenderEngineType::SIMPLE_FORWARD, true);
+  std::shared_ptr<IRender> app = CreateRender(WIDTH, HEIGHT, RenderEngineType::SIMPLE_FORWARD, false);
 //  std::shared_ptr<IRender> app = CreateRender(WIDTH, HEIGHT, RenderEngineType::SIMPLE_TEXTURE);
 
   if(app == nullptr)

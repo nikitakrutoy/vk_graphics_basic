@@ -18,6 +18,7 @@ void SimpleRender::SetupDeviceFeatures()
 {
   // m_enabledDeviceFeatures.fillModeNonSolid = VK_TRUE;
   m_enabledDeviceFeatures.geometryShader = VK_TRUE;
+  m_enabledDeviceFeatures.tessellationShader  = VK_TRUE;
 }
 
 void SimpleRender::SetupDeviceExtensions()
@@ -155,6 +156,9 @@ void SimpleRender::SetupSimplePipeline()
 
   std::unordered_map<VkShaderStageFlagBits, std::string> shader_paths;
   shader_paths[VK_SHADER_STAGE_FRAGMENT_BIT] = FRAGMENT_SHADER_PATH + ".spv";
+  shader_paths[VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT] = EXPLODE_TESC_SHADER_PATH + ".spv";
+  shader_paths[VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT] = EXPLODE_TESE_SHADER_PATH + ".spv";
+  shader_paths[VK_SHADER_STAGE_GEOMETRY_BIT] = EXPLODE_GEOMETRY_SHADER_PATH + ".spv";
   shader_paths[VK_SHADER_STAGE_VERTEX_BIT]   = VERTEX_SHADER_PATH + ".spv";
 
   maker.LoadShaders(m_device, shader_paths);
@@ -262,7 +266,10 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
     vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_basicForwardPipeline.layout, 0, 1,
                             &m_dSet, 0, VK_NULL_HANDLE);
 
-    VkShaderStageFlags stageFlags = (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    VkShaderStageFlags stageFlags = (
+      VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT | 
+      VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | 
+      VK_SHADER_STAGE_FRAGMENT_BIT);
 
     VkDeviceSize zero_offset = 0u;
     VkBuffer vertexBuf = m_pScnMgr->GetVertexBuffer();
