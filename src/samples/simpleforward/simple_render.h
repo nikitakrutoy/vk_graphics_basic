@@ -19,7 +19,7 @@ class SimpleRender : public IRender
 {
 public:
   const std::string VERTEX_SHADER_PATH = "../resources/shaders/simple.vert";
-  const std::string FRAGMENT_SHADER_PATH = "../resources/shaders/simple.frag";
+  const std::string MRT_FRAGMENT_SHADER_PATH = "../resources/shaders/mrt.frag";
 
   SimpleRender(uint32_t a_width, uint32_t a_height);
   ~SimpleRender()  { Cleanup(); };
@@ -83,6 +83,20 @@ protected:
     VkSemaphore renderingFinished = VK_NULL_HANDLE;
   } m_presentationResources;
 
+  struct FrameBufferAttachment {
+		VkImage image;
+		VkDeviceMemory mem;
+		VkImageView view;
+		VkFormat format;
+	};
+	struct FrameBuffer {
+		int32_t width, height;
+		VkFramebuffer frameBuffer;
+		FrameBufferAttachment position, normal, albedo;
+		FrameBufferAttachment depth;
+		VkRenderPass renderPass;
+	} m_offScreenFrameBuf;
+
   std::vector<VkFence> m_frameFences;
   std::vector<VkCommandBuffer> m_cmdBuffersDrawMain;
 
@@ -90,6 +104,7 @@ protected:
   {
     LiteMath::float4x4 projView;
     LiteMath::float4x4 model;
+    LiteMath::float4 color;
   } pushConst2M;
 
   UniformParams m_uniforms {};
@@ -98,6 +113,7 @@ protected:
   void* m_uboMappedMem = nullptr;
 
   pipeline_data_t m_basicForwardPipeline {};
+  pipeline_data_t m_offscreenPipeline {};
 
   VkDescriptorSet m_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_dSetLayout = VK_NULL_HANDLE;
@@ -134,6 +150,13 @@ protected:
   std::shared_ptr<SceneManager> m_pScnMgr;
 
   void DrawFrameSimple();
+
+  void SetupOffscreenFramebuffer();
+
+  void CreateAttachment(
+  VkFormat format,
+  VkImageUsageFlagBits usage,
+  FrameBufferAttachment *attachment);
 
   void CreateInstance();
   void CreateDevice(uint32_t a_deviceId);

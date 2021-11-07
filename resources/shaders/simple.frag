@@ -4,6 +4,13 @@
 
 #include "common.h"
 
+layout(push_constant) uniform params_t
+{
+    mat4 mProjView;
+    mat4 mModel;
+    vec4 color;
+} params;
+
 layout(location = 0) out vec4 out_fragColor;
 
 layout (location = 0 ) in VS_OUT
