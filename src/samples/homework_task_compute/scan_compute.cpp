@@ -147,13 +147,13 @@ void ScanCompute::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkPipeline
     vkCmdDispatch(a_cmdBuff, 1, 1, 1);
 
     VkBufferMemoryBarrier barrier2 = {};
-    barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-    barrier.pNext = nullptr;
-    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    barrier.buffer = m_tmp;
-    barrier.offset = 0;
-    barrier.size = VK_WHOLE_SIZE;
+    barrier2.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    barrier2.pNext = nullptr;
+    barrier2.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    barrier2.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    barrier2.buffer = m_tmp;
+    barrier2.offset = 0;
+    barrier2.size = VK_WHOLE_SIZE;
     vkCmdPipelineBarrier(a_cmdBuff, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, {}, 0, nullptr, 1, &barrier2, 0, nullptr);
 
     vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline2);
