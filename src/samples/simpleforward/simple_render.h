@@ -19,6 +19,8 @@ class SimpleRender : public IRender
 {
 public:
   const std::string VERTEX_SHADER_PATH = "../resources/shaders/simple.vert";
+  const std::string RESOLVE_FRAGMENT_SHADER_PATH = "../resources/shaders/resolve.frag";
+  const std::string RESOLVE_VERTEX_SHADER_PATH = "../resources/shaders/resolve.vert";
   const std::string MRT_FRAGMENT_SHADER_PATH = "../resources/shaders/mrt.frag";
 
   SimpleRender(uint32_t a_width, uint32_t a_height);
@@ -80,6 +82,7 @@ protected:
     uint32_t    currentFrame      = 0u;
     VkQueue     queue             = VK_NULL_HANDLE;
     VkSemaphore imageAvailable    = VK_NULL_HANDLE;
+    VkSemaphore offscreenFinished    = VK_NULL_HANDLE;
     VkSemaphore renderingFinished = VK_NULL_HANDLE;
   } m_presentationResources;
 
@@ -97,8 +100,11 @@ protected:
 		VkRenderPass renderPass;
 	} m_offScreenFrameBuf;
 
+  VkSampler m_colorSampler;
+
   std::vector<VkFence> m_frameFences;
   std::vector<VkCommandBuffer> m_cmdBuffersDrawMain;
+  std::vector<VkCommandBuffer> m_cmdBuffersOffscreen;
 
   struct
   {
@@ -113,10 +119,13 @@ protected:
   void* m_uboMappedMem = nullptr;
 
   pipeline_data_t m_basicForwardPipeline {};
+  pipeline_data_t m_resolvePipeline {};
   pipeline_data_t m_offscreenPipeline {};
 
   VkDescriptorSet m_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_dSetLayout = VK_NULL_HANDLE;
+  VkDescriptorSet m_dResolveSet = VK_NULL_HANDLE;
+  VkDescriptorSetLayout m_dResolveSetLayout = VK_NULL_HANDLE;
   VkRenderPass m_screenRenderPass = VK_NULL_HANDLE; // main renderpass
 
   std::shared_ptr<vk_utils::DescriptorMaker> m_pBindings = nullptr;
@@ -162,6 +171,12 @@ protected:
   void CreateDevice(uint32_t a_deviceId);
 
   void BuildCommandBufferSimple(VkCommandBuffer cmdBuff, VkFramebuffer frameBuff,
+                                VkImageView a_targetImageView, VkPipeline a_pipeline) {};
+
+  void BuildOffscreenCommandBuffer(VkCommandBuffer cmdBuff, VkFramebuffer frameBuff,
+                              VkImageView a_targetImageView, VkPipeline a_pipeline);
+
+  void BuildResolveCommandBuffer(VkCommandBuffer cmdBuff, VkFramebuffer frameBuff,
                                 VkImageView a_targetImageView, VkPipeline a_pipeline);
 
   virtual void SetupSimplePipeline();

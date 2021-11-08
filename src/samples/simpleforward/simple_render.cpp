@@ -126,6 +126,23 @@ void SimpleRender::SetupOffscreenFramebuffer() {
 		fbufCreateInfo.height = m_offScreenFrameBuf.height;
 		fbufCreateInfo.layers = 1;
 		VK_CHECK_RESULT(vkCreateFramebuffer(m_device, &fbufCreateInfo, nullptr, &m_offScreenFrameBuf.frameBuffer));
+
+    // Create sampler to sample from the color attachments
+    VkSamplerCreateInfo sampler {};
+    sampler.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler.maxAnisotropy = 1.0f;
+		sampler.magFilter = VK_FILTER_NEAREST;
+		sampler.minFilter = VK_FILTER_NEAREST;
+		sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		sampler.addressModeV = sampler.addressModeU;
+		sampler.addressModeW = sampler.addressModeU;
+		sampler.mipLodBias = 0.0f;
+		sampler.maxAnisotropy = 1.0f;
+		sampler.minLod = 0.0f;
+		sampler.maxLod = 1.0f;
+		sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+		VK_CHECK_RESULT(vkCreateSampler(m_device, &sampler, nullptr, &m_colorSampler));
 }
 
 void SimpleRender::CreateAttachment(
@@ -237,6 +254,7 @@ void SimpleRender::InitVulkan(const char** a_instanceExtensions, uint32_t a_inst
 
   m_cmdBuffersDrawMain.reserve(m_framesInFlight);
   m_cmdBuffersDrawMain = vk_utils::createCommandBuffers(m_device, m_commandPool, m_framesInFlight);
+  m_cmdBuffersOffscreen = vk_utils::createCommandBuffers(m_device, m_commandPool, m_framesInFlight);
 
   m_frameFences.resize(m_framesInFlight);
   VkFenceCreateInfo fenceInfo = {};
@@ -262,6 +280,7 @@ void SimpleRender::InitPresentation(VkSurfaceKHR &a_surface)
   VkSemaphoreCreateInfo semaphoreInfo = {};
   semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
   VK_CHECK_RESULT(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_presentationResources.imageAvailable));
+  VK_CHECK_RESULT(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_presentationResources.offscreenFinished));
   VK_CHECK_RESULT(vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_presentationResources.renderingFinished));
   m_screenRenderPass = vk_utils::createDefaultRenderPass(m_device, m_swapchain.GetFormat());
 
@@ -325,15 +344,23 @@ inline VkPipelineColorBlendAttachmentState pipelineColorBlendAttachmentState(
 void SimpleRender::SetupSimplePipeline()
 {
   std::vector<std::pair<VkDescriptorType, uint32_t> > dtypes = {
-      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,             1}
+      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,             1},
+      {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,     3}
   };
 
   if(m_pBindings == nullptr)
-    m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 1);
+    m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 2);
 
   m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT);
   m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
   m_pBindings->BindEnd(&m_dSet, &m_dSetLayout);
+
+  m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT);
+  m_pBindings->BindImage(0, m_offScreenFrameBuf.position.view, m_colorSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  m_pBindings->BindImage(1, m_offScreenFrameBuf.normal.view, m_colorSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  m_pBindings->BindImage(2, m_offScreenFrameBuf.albedo.view, m_colorSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  m_pBindings->BindBuffer(3, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+  m_pBindings->BindEnd(&m_dResolveSet, &m_dResolveSetLayout);
 
   // if we are recreating pipeline (for example, to reload shaders)
   // we need to cleanup old pipeline
@@ -370,6 +397,19 @@ void SimpleRender::SetupSimplePipeline()
   m_offscreenPipeline.pipeline = maker.MakePipeline(m_device, m_pScnMgr->GetPipelineVertexInputStateCreateInfo(),
                                                        m_offScreenFrameBuf.renderPass, {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR});
 
+
+  // make resolve pipeline
+
+  shader_paths[VK_SHADER_STAGE_VERTEX_BIT]   = RESOLVE_VERTEX_SHADER_PATH + ".spv";
+  shader_paths[VK_SHADER_STAGE_FRAGMENT_BIT] = RESOLVE_FRAGMENT_SHADER_PATH + ".spv";
+  maker.LoadShaders(m_device, shader_paths);
+  m_resolvePipeline.layout = maker.MakeLayout(m_device, {m_dResolveSetLayout}, sizeof(pushConst2M));
+  maker.SetDefaultState(m_width, m_height);
+  VkPipelineVertexInputStateCreateInfo pipelineVertexInputStateCreateInfo {};
+  pipelineVertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+  m_resolvePipeline.pipeline = maker.MakePipeline(m_device, pipelineVertexInputStateCreateInfo,
+                                                       m_screenRenderPass, {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR});
+
 }
 
 void SimpleRender::CreateUniformBuffer()
@@ -405,7 +445,7 @@ void SimpleRender::UpdateUniformBuffer(float a_time)
   memcpy(m_uboMappedMem, &m_uniforms, sizeof(m_uniforms));
 }
 
-void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebuffer a_frameBuff,
+void SimpleRender::BuildOffscreenCommandBuffer(VkCommandBuffer a_cmdBuff, VkFramebuffer a_frameBuff,
                                             VkImageView, VkPipeline a_pipeline)
 {
   vkResetCommandBuffer(a_cmdBuff, 0);
@@ -477,6 +517,54 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
   VK_CHECK_RESULT(vkEndCommandBuffer(a_cmdBuff));
 }
 
+void SimpleRender::BuildResolveCommandBuffer(VkCommandBuffer a_cmdBuff, VkFramebuffer a_frameBuff,
+                                            VkImageView, VkPipeline a_pipeline)
+{
+  vkResetCommandBuffer(a_cmdBuff, 0);
+
+  VkCommandBufferBeginInfo beginInfo = {};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+
+  VK_CHECK_RESULT(vkBeginCommandBuffer(a_cmdBuff, &beginInfo));
+
+  vk_utils::setDefaultViewport(a_cmdBuff, static_cast<float>(m_width), static_cast<float>(m_height));
+  vk_utils::setDefaultScissor(a_cmdBuff, m_width, m_height);
+
+  ///// draw final scene to screen
+  {
+    VkRenderPassBeginInfo renderPassInfo = {};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = m_screenRenderPass;
+    renderPassInfo.framebuffer = a_frameBuff;
+    renderPassInfo.renderArea.offset = {0, 0};
+    renderPassInfo.renderArea.extent.width = m_offScreenFrameBuf.width;
+		renderPassInfo.renderArea.extent.height = m_offScreenFrameBuf.height;
+
+    VkClearValue clearValues[2] = {};
+    clearValues[0].color = {0.0f, 0.0f, 0.0f, 1.0f};
+    clearValues[1].depthStencil = {1.0f, 0};
+    renderPassInfo.clearValueCount = 2;
+    renderPassInfo.pClearValues = &clearValues[0];
+
+    vkCmdBeginRenderPass(a_cmdBuff, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, a_pipeline);
+
+    vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_resolvePipeline.layout, 0, 1,
+                            &m_dResolveSet, 0, VK_NULL_HANDLE);
+
+    VkShaderStageFlags stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT;
+
+    vkCmdPushConstants(a_cmdBuff, m_resolvePipeline.layout, stageFlags, 0,
+                    sizeof(pushConst2M), &pushConst2M);
+
+    vkCmdDraw(a_cmdBuff, 3, 1, 0, 0);
+
+    vkCmdEndRenderPass(a_cmdBuff);
+  }
+
+  VK_CHECK_RESULT(vkEndCommandBuffer(a_cmdBuff));
+}
 
 void SimpleRender::CleanupPipelineAndSwapchain()
 {
@@ -550,8 +638,10 @@ void SimpleRender::RecreateSwapChain()
   m_cmdBuffersDrawMain = vk_utils::createCommandBuffers(m_device, m_commandPool, m_framesInFlight);
   for (uint32_t i = 0; i < m_swapchain.GetImageCount(); ++i)
   {
-    BuildCommandBufferSimple(m_cmdBuffersDrawMain[i], m_offScreenFrameBuf.frameBuffer,
-                             m_swapchain.GetAttachment(i).view, m_offscreenPipeline.pipeline);
+    BuildOffscreenCommandBuffer(m_cmdBuffersOffscreen[i], m_offScreenFrameBuf.frameBuffer, m_swapchain.GetAttachment(i).view,
+                           m_offscreenPipeline.pipeline);
+    BuildResolveCommandBuffer(m_cmdBuffersDrawMain[i], m_frameBuffers[i], m_swapchain.GetAttachment(i).view,
+                           m_resolvePipeline.pipeline);
   }
 
   m_pGUIRender->OnSwapchainChanged(m_swapchain);
@@ -656,8 +746,10 @@ void SimpleRender::ProcessInput(const AppInput &input)
 
     for (uint32_t i = 0; i < m_framesInFlight; ++i)
     {
-      BuildCommandBufferSimple(m_cmdBuffersDrawMain[i], m_offScreenFrameBuf.frameBuffer,
-                               m_swapchain.GetAttachment(i).view, m_offscreenPipeline.pipeline);
+      BuildOffscreenCommandBuffer(m_cmdBuffersOffscreen[i], m_offScreenFrameBuf.frameBuffer, m_swapchain.GetAttachment(i).view,
+                            m_offscreenPipeline.pipeline);
+      BuildResolveCommandBuffer(m_cmdBuffersDrawMain[i], m_frameBuffers[i], m_swapchain.GetAttachment(i).view,
+                            m_resolvePipeline.pipeline);
     }
   }
 
@@ -698,8 +790,10 @@ void SimpleRender::LoadScene(const char* path, bool transpose_inst_matrices)
 
   for (uint32_t i = 0; i < m_framesInFlight; ++i)
   {
-    BuildCommandBufferSimple(m_cmdBuffersDrawMain[i], m_offScreenFrameBuf.frameBuffer,
-                             m_swapchain.GetAttachment(i).view, m_offscreenPipeline.pipeline);
+    BuildOffscreenCommandBuffer(m_cmdBuffersOffscreen[i], m_offScreenFrameBuf.frameBuffer, m_swapchain.GetAttachment(i).view,
+                           m_offscreenPipeline.pipeline);
+    BuildResolveCommandBuffer(m_cmdBuffersDrawMain[i], m_frameBuffers[i], m_swapchain.GetAttachment(i).view,
+                           m_resolvePipeline.pipeline);
   }
 }
 
@@ -711,12 +805,13 @@ void SimpleRender::DrawFrameSimple()
   uint32_t imageIdx;
   m_swapchain.AcquireNextImage(m_presentationResources.imageAvailable, &imageIdx);
 
-  auto currentCmdBuf = m_cmdBuffersDrawMain[m_presentationResources.currentFrame];
+  auto currentResolveCmdBuf = m_cmdBuffersDrawMain[m_presentationResources.currentFrame];
+  auto currentOffscreenCmdBuf = m_cmdBuffersOffscreen[m_presentationResources.currentFrame];
 
   VkSemaphore waitSemaphores[] = {m_presentationResources.imageAvailable};
   VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
-  BuildCommandBufferSimple(currentCmdBuf, m_offScreenFrameBuf.frameBuffer, m_swapchain.GetAttachment(imageIdx).view,
+  BuildOffscreenCommandBuffer(currentOffscreenCmdBuf, m_offScreenFrameBuf.frameBuffer, m_swapchain.GetAttachment(imageIdx).view,
                            m_offscreenPipeline.pipeline);
 
   VkSubmitInfo submitInfo = {};
@@ -725,11 +820,23 @@ void SimpleRender::DrawFrameSimple()
   submitInfo.pWaitSemaphores = waitSemaphores;
   submitInfo.pWaitDstStageMask = waitStages;
   submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &currentCmdBuf;
+  submitInfo.pCommandBuffers = &currentOffscreenCmdBuf;
 
-  VkSemaphore signalSemaphores[] = {m_presentationResources.renderingFinished};
+  VkSemaphore signalSemaphores[] = {m_presentationResources.offscreenFinished};
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores = signalSemaphores;
+
+  VK_CHECK_RESULT(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, nullptr));
+
+  BuildResolveCommandBuffer(currentResolveCmdBuf, m_frameBuffers[imageIdx], m_swapchain.GetAttachment(imageIdx).view,
+                           m_resolvePipeline.pipeline);
+
+
+  waitSemaphores[0] = m_presentationResources.offscreenFinished;
+  submitInfo.pWaitSemaphores = waitSemaphores;
+  signalSemaphores[0] = m_presentationResources.renderingFinished;
+  submitInfo.pSignalSemaphores = signalSemaphores;
+  submitInfo.pCommandBuffers = &currentResolveCmdBuf;
 
   VK_CHECK_RESULT(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_frameFences[m_presentationResources.currentFrame]));
 
@@ -815,29 +922,45 @@ void SimpleRender::DrawFrameWithGUI()
     RUN_TIME_ERROR("Failed to acquire the next swapchain image!");
   }
 
-  auto currentCmdBuf = m_cmdBuffersDrawMain[m_presentationResources.currentFrame];
+  auto currentResolveCmdBuf = m_cmdBuffersDrawMain[m_presentationResources.currentFrame];
+  auto currentOffscreenCmdBuf = m_cmdBuffersOffscreen[m_presentationResources.currentFrame];
 
   VkSemaphore waitSemaphores[] = {m_presentationResources.imageAvailable};
   VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
-  BuildCommandBufferSimple(currentCmdBuf, m_offScreenFrameBuf.frameBuffer, m_swapchain.GetAttachment(imageIdx).view,
-    m_offscreenPipeline.pipeline);
+  BuildOffscreenCommandBuffer(currentOffscreenCmdBuf, m_offScreenFrameBuf.frameBuffer, m_swapchain.GetAttachment(imageIdx).view,
+                           m_offscreenPipeline.pipeline);
 
-  ImDrawData* pDrawData = ImGui::GetDrawData();
-  auto currentGUICmdBuf = m_pGUIRender->BuildGUIRenderCommand(imageIdx, pDrawData);
 
-  std::vector<VkCommandBuffer> submitCmdBufs = { currentCmdBuf, currentGUICmdBuf};
 
   VkSubmitInfo submitInfo = {};
   submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
   submitInfo.waitSemaphoreCount = 1;
   submitInfo.pWaitSemaphores = waitSemaphores;
   submitInfo.pWaitDstStageMask = waitStages;
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = &currentOffscreenCmdBuf;
+
+  VkSemaphore signalSemaphores[] = {m_presentationResources.offscreenFinished};
+  submitInfo.signalSemaphoreCount = 1;
+  submitInfo.pSignalSemaphores = signalSemaphores;
+
+  VK_CHECK_RESULT(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, nullptr));
+
+  BuildResolveCommandBuffer(currentResolveCmdBuf, m_frameBuffers[imageIdx], m_swapchain.GetAttachment(imageIdx).view,
+                           m_resolvePipeline.pipeline);
+
+  ImDrawData* pDrawData = ImGui::GetDrawData();
+  auto currentGUICmdBuf = m_pGUIRender->BuildGUIRenderCommand(imageIdx, pDrawData);
+
+  std::vector<VkCommandBuffer> submitCmdBufs = { currentResolveCmdBuf, currentGUICmdBuf};
+
   submitInfo.commandBufferCount = (uint32_t)submitCmdBufs.size();
   submitInfo.pCommandBuffers = submitCmdBufs.data();
 
-  VkSemaphore signalSemaphores[] = {m_presentationResources.renderingFinished};
-  submitInfo.signalSemaphoreCount = 1;
+  waitSemaphores[0] = m_presentationResources.offscreenFinished;
+  submitInfo.pWaitSemaphores = waitSemaphores;
+  signalSemaphores[0] = m_presentationResources.renderingFinished;
   submitInfo.pSignalSemaphores = signalSemaphores;
 
   VK_CHECK_RESULT(vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_frameFences[m_presentationResources.currentFrame]));
