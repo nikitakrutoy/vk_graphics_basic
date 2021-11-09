@@ -586,7 +586,6 @@ void SimpleRender::BuildResolveCommandBuffer(VkCommandBuffer a_cmdBuff, VkFrameb
       pushConst2M.model = m_pScnMgr->GetLightInstanceMatrix(i);
       pushConst2M.lightPos =  m_pScnMgr->GetLightInstancePos(i);
       pushConst2M.isOutsideLight = LiteMath::length3(to_float4(m_cam.pos, 0.f) - pushConst2M.lightPos) >= pushConst2M.model[0][0];
-      std::cout << pushConst2M.isOutsideLight << std::endl;
       vkCmdPushConstants(a_cmdBuff, m_resolvePipeline.layout, stageFlags, 0,
                          sizeof(pushConst2M), &pushConst2M);
 
@@ -607,6 +606,12 @@ void SimpleRender::CleanupPipelineAndSwapchain()
     vkFreeCommandBuffers(m_device, m_commandPool, static_cast<uint32_t>(m_cmdBuffersDrawMain.size()),
                          m_cmdBuffersDrawMain.data());
     m_cmdBuffersDrawMain.clear();
+  }
+  if (!m_cmdBuffersOffscreen.empty())
+  {
+    vkFreeCommandBuffers(m_device, m_commandPool, static_cast<uint32_t>(m_cmdBuffersOffscreen.size()),
+                         m_cmdBuffersOffscreen.data());
+    m_cmdBuffersOffscreen.clear();
   }
 
   for (size_t i = 0; i < m_frameFences.size(); i++)
@@ -629,10 +634,28 @@ void SimpleRender::CleanupPipelineAndSwapchain()
     }
   }
 
+  if(m_offScreenFrameBuf.frameBuffer != VK_NULL_HANDLE)
+  {
+    vkDestroyFramebuffer(m_device, m_offScreenFrameBuf.frameBuffer, nullptr);
+    m_offScreenFrameBuf.frameBuffer = VK_NULL_HANDLE;
+  }
+
   if(m_screenRenderPass != VK_NULL_HANDLE)
   {
     vkDestroyRenderPass(m_device, m_screenRenderPass, nullptr);
     m_screenRenderPass = VK_NULL_HANDLE;
+  }
+
+  if(m_offScreenFrameBuf.renderPass != VK_NULL_HANDLE)
+  {
+    vkDestroyRenderPass(m_device, m_offScreenFrameBuf.renderPass, nullptr);
+    m_offScreenFrameBuf.renderPass = VK_NULL_HANDLE;
+  }
+
+  if(m_colorSampler != VK_NULL_HANDLE)
+  {
+    vkDestroySampler(m_device, m_colorSampler, nullptr);
+    m_colorSampler = VK_NULL_HANDLE;
   }
 
   m_swapchain.Cleanup();
@@ -703,6 +726,17 @@ void SimpleRender::Cleanup()
     m_offscreenPipeline.layout = VK_NULL_HANDLE;
   }
 
+  if (m_resolvePipeline.pipeline != VK_NULL_HANDLE)
+  {
+    vkDestroyPipeline(m_device, m_resolvePipeline.pipeline, nullptr);
+    m_resolvePipeline.pipeline = VK_NULL_HANDLE;
+  }
+  if (m_resolvePipeline.layout != VK_NULL_HANDLE)
+  {
+    vkDestroyPipelineLayout(m_device, m_resolvePipeline.layout, nullptr);
+    m_resolvePipeline.layout = VK_NULL_HANDLE;
+  }
+
   if (m_presentationResources.imageAvailable != VK_NULL_HANDLE)
   {
     vkDestroySemaphore(m_device, m_presentationResources.imageAvailable, nullptr);
@@ -713,6 +747,24 @@ void SimpleRender::Cleanup()
     vkDestroySemaphore(m_device, m_presentationResources.renderingFinished, nullptr);
     m_presentationResources.renderingFinished = VK_NULL_HANDLE;
   }
+  if (m_presentationResources.offscreenFinished != VK_NULL_HANDLE)
+  {
+    vkDestroySemaphore(m_device, m_presentationResources.offscreenFinished, nullptr);
+    m_presentationResources.offscreenFinished = VK_NULL_HANDLE;
+  }
+
+  vkDestroyImage(m_device, m_offScreenFrameBuf.albedo.image, nullptr);
+  vkDestroyImage(m_device, m_offScreenFrameBuf.position.image, nullptr);
+  vkDestroyImage(m_device, m_offScreenFrameBuf.normal.image, nullptr);
+  vkDestroyImage(m_device, m_offScreenFrameBuf.depth.image, nullptr);
+  vkDestroyImageView(m_device, m_offScreenFrameBuf.albedo.view, nullptr);
+  vkDestroyImageView(m_device, m_offScreenFrameBuf.position.view, nullptr);
+  vkDestroyImageView(m_device, m_offScreenFrameBuf.normal.view, nullptr);
+  vkDestroyImageView(m_device, m_offScreenFrameBuf.depth.view, nullptr);
+  vkFreeMemory(m_device, m_offScreenFrameBuf.albedo.mem, nullptr);
+  vkFreeMemory(m_device, m_offScreenFrameBuf.position.mem, nullptr);
+  vkFreeMemory(m_device, m_offScreenFrameBuf.normal.mem, nullptr);
+  vkFreeMemory(m_device, m_offScreenFrameBuf.depth.mem, nullptr);
 
   if (m_commandPool != VK_NULL_HANDLE)
   {
