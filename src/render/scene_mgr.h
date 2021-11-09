@@ -27,10 +27,12 @@ struct SceneManager
   bool LoadSceneXML(const std::string &scenePath, bool transpose = true);
   void LoadSingleTriangle();
 
+  void AddLightSphere(int sectorCount = 10, int stackCount = 10);
   uint32_t AddMeshFromFile(const std::string& meshPath);
   uint32_t AddMeshFromData(cmesh::SimpleMesh &meshData);
 
   uint32_t InstanceMesh(uint32_t meshId, const LiteMath::float4x4 &matrix, bool markForRender = true);
+  uint32_t InstanceLight(float3 pos, float scale);
 
   void MarkInstance(uint32_t instId);
   void UnmarkInstance(uint32_t instId);
@@ -48,13 +50,18 @@ struct SceneManager
 
   uint32_t MeshesNum() const {return (uint32_t)m_meshInfos.size();}
   uint32_t InstancesNum() const {return (uint32_t)m_instanceInfos.size();}
-
+  uint32_t LightInstancesNum() const {return (uint32_t)m_lightInstanceMatrices.size();}
+  
+  uint32_t GetLightMeshId() { return m_lightSphereMesh;};
   hydra_xml::Camera GetCamera(uint32_t camId) const;
   MeshInfo GetMeshInfo(uint32_t meshId) const {assert(meshId < m_meshInfos.size()); return m_meshInfos[meshId];}
   LiteMath::Box4f GetMeshBbox(uint32_t meshId) const {assert(meshId < m_meshBboxes.size()); return m_meshBboxes[meshId];}
   InstanceInfo GetInstanceInfo(uint32_t instId) const {assert(instId < m_instanceInfos.size()); return m_instanceInfos[instId];}
   LiteMath::Box4f GetInstanceBbox(uint32_t instId) const {assert(instId < m_instanceBboxes.size()); return m_instanceBboxes[instId];}
   LiteMath::float4x4 GetInstanceMatrix(uint32_t instId) const {assert(instId < m_instanceMatrices.size()); return m_instanceMatrices[instId];}
+  LiteMath::float4x4 GetLightInstanceMatrix(uint32_t instId) const {assert(instId < m_lightInstanceMatrices.size()); return m_lightInstanceMatrices[instId];}
+  LiteMath::float4 GetLightInstancePos(uint32_t instId) const {
+    assert(instId < m_lightInstanceMatrices.size()); return GetLightInstanceMatrix(instId).get_col(3);}
   LiteMath::Box4f GetSceneBbox() const {return sceneBbox;}
 
 private:
@@ -68,8 +75,12 @@ private:
   std::vector<LiteMath::Box4f> m_instanceBboxes = {};
   std::vector<LiteMath::float4x4> m_instanceMatrices = {};
 
+  std::vector<LiteMath::float4x4> m_lightInstanceMatrices = {};
+
   std::vector<hydra_xml::Camera> m_sceneCameras = {};
   LiteMath::Box4f sceneBbox;
+
+  uint32_t m_lightSphereMesh;
 
   uint32_t m_totalVertices = 0u;
   uint32_t m_totalIndices  = 0u;

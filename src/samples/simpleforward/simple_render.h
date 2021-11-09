@@ -111,6 +111,9 @@ protected:
     LiteMath::float4x4 projView;
     LiteMath::float4x4 model;
     LiteMath::float4 color;
+    LiteMath::float4 lightPos;
+    LiteMath::float2 screenSize;
+    uint32_t isOutsideLight;
   } pushConst2M;
 
   UniformParams m_uniforms {};
@@ -164,7 +167,8 @@ protected:
 
   void CreateAttachment(
   VkFormat format,
-  VkImageUsageFlagBits usage,
+  VkImageUsageFlagBits imageUsageType,
+  VkImageUsageFlags usage,
   FrameBufferAttachment *attachment);
 
   void CreateInstance();

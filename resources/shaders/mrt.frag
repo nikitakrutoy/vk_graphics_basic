@@ -9,6 +9,8 @@ layout(push_constant) uniform params_t
     mat4 mProjView;
     mat4 mModel;
     vec4 color;
+    vec4 lightPos;
+    vec2 screenSize; 
 } params;
 
 layout (location = 0) out vec4 outPosition;

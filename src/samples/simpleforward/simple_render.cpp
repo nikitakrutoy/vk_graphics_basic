@@ -15,11 +15,13 @@ void SimpleRender::SetupOffscreenFramebuffer() {
   CreateAttachment(
     VK_FORMAT_R16G16B16A16_SFLOAT,
     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
     &m_offScreenFrameBuf.position);
 
   // (World space) Normals
   CreateAttachment(
     VK_FORMAT_R16G16B16A16_SFLOAT,
+    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
     &m_offScreenFrameBuf.normal);
 
@@ -27,13 +29,16 @@ void SimpleRender::SetupOffscreenFramebuffer() {
   CreateAttachment(
     VK_FORMAT_R8G8B8A8_UNORM,
     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
     &m_offScreenFrameBuf.albedo);
 
   // Depth attachment
 
+  VkImageUsageFlags flags =  VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
   CreateAttachment(
     VK_FORMAT_D32_SFLOAT,
     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+    flags,
     &m_offScreenFrameBuf.depth);
 
   // Set up separate renderpass with references to the color and depth attachments
@@ -148,7 +153,8 @@ void SimpleRender::SetupOffscreenFramebuffer() {
 
 void SimpleRender::CreateAttachment(
   VkFormat format,
-  VkImageUsageFlagBits usage,
+  VkImageUsageFlagBits imageUsageType,
+  VkImageUsageFlags usage,
   FrameBufferAttachment *attachment)
 {
   VkImageAspectFlags aspectMask = 0;
@@ -156,14 +162,14 @@ void SimpleRender::CreateAttachment(
 
   attachment->format = format;
 
-  if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
+  if (imageUsageType & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
   {
     aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   }
-  if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
+  if (imageUsageType & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
   {
-    aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+    aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
     imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
   }
 
@@ -217,6 +223,7 @@ SimpleRender::SimpleRender(uint32_t a_width, uint32_t a_height) : m_width(a_widt
 #else
   m_enableValidation = true;
 #endif
+  pushConst2M.screenSize = vec2(a_width, a_height);
 }
 
 void SimpleRender::SetupDeviceFeatures()
@@ -294,10 +301,10 @@ void SimpleRender::InitPresentation(VkSurfaceKHR &a_surface)
   };
   vk_utils::getSupportedDepthFormat(m_physicalDevice, depthFormats, &m_depthBuffer.format);
   m_depthBuffer  = vk_utils::createDepthTexture(m_device, m_physicalDevice, m_width, m_height, m_depthBuffer.format);
-  m_frameBuffers = vk_utils::createFrameBuffers(m_device, m_swapchain, m_screenRenderPass, m_depthBuffer.view);
 
   SetupOffscreenFramebuffer();
 
+  m_frameBuffers = vk_utils::createFrameBuffers(m_device, m_swapchain, m_screenRenderPass, m_offScreenFrameBuf.depth.view);
   m_pGUIRender = std::make_shared<ImGuiRender>(m_instance, m_device, m_physicalDevice, m_queueFamilyIDXs.graphics, m_graphicsQueue, m_swapchain);
 }
 
@@ -360,7 +367,6 @@ void SimpleRender::SetupSimplePipeline()
   m_pBindings->BindImage(0, m_offScreenFrameBuf.position.view, m_colorSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   m_pBindings->BindImage(1, m_offScreenFrameBuf.normal.view, m_colorSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   m_pBindings->BindImage(2, m_offScreenFrameBuf.albedo.view, m_colorSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-  m_pBindings->BindBuffer(3, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
   m_pBindings->BindEnd(&m_dResolveSet, &m_dResolveSetLayout);
 
   // if we are recreating pipeline (for example, to reload shaders)
@@ -406,9 +412,22 @@ void SimpleRender::SetupSimplePipeline()
   maker.LoadShaders(m_device, shader_paths);
   m_resolvePipeline.layout = maker.MakeLayout(m_device, {m_dResolveSetLayout}, sizeof(pushConst2M));
   maker.SetDefaultState(m_width, m_height);
-  VkPipelineVertexInputStateCreateInfo pipelineVertexInputStateCreateInfo {};
-  pipelineVertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  m_resolvePipeline.pipeline = maker.MakePipeline(m_device, pipelineVertexInputStateCreateInfo,
+
+  VkPipelineColorBlendAttachmentState blend = pipelineColorBlendAttachmentState(0xf, VK_TRUE);
+  blend.colorBlendOp = VK_BLEND_OP_ADD;
+  blend.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+  blend.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+  blend.alphaBlendOp = VK_BLEND_OP_ADD;
+  blend.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+  blend.dstAlphaBlendFactor = VK_BLEND_FACTOR_DST_ALPHA;
+  maker.colorBlending.attachmentCount = 1;
+  maker.colorBlending.pAttachments = &blend;
+  maker.rasterizer.cullMode = VK_CULL_MODE_NONE;
+  maker.depthStencilTest.depthTestEnable = true;
+  maker.depthStencilTest.depthWriteEnable = false;
+
+
+  m_resolvePipeline.pipeline = maker.MakePipeline(m_device,  m_pScnMgr->GetPipelineVertexInputStateCreateInfo(),
                                                        m_screenRenderPass, {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR});
 
 }
@@ -554,12 +573,26 @@ void SimpleRender::BuildResolveCommandBuffer(VkCommandBuffer a_cmdBuff, VkFrameb
     vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_resolvePipeline.layout, 0, 1,
                             &m_dResolveSet, 0, VK_NULL_HANDLE);
 
+    VkDeviceSize zero_offset = 0u;
+    VkBuffer vertexBuf = m_pScnMgr->GetVertexBuffer();
+    VkBuffer indexBuf = m_pScnMgr->GetIndexBuffer();
+
+    vkCmdBindVertexBuffers(a_cmdBuff, 0, 1, &vertexBuf, &zero_offset);
+    vkCmdBindIndexBuffer(a_cmdBuff, indexBuf, 0, VK_INDEX_TYPE_UINT32);
+
     VkShaderStageFlags stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT;
 
-    vkCmdPushConstants(a_cmdBuff, m_resolvePipeline.layout, stageFlags, 0,
-                    sizeof(pushConst2M), &pushConst2M);
+    for (int i = 0; i < m_pScnMgr->LightInstancesNum(); i++) {
+      pushConst2M.model = m_pScnMgr->GetLightInstanceMatrix(i);
+      pushConst2M.lightPos =  m_pScnMgr->GetLightInstancePos(i);
+      pushConst2M.isOutsideLight = LiteMath::length3(to_float4(m_cam.pos, 0.f) - pushConst2M.lightPos) >= pushConst2M.model[0][0];
+      std::cout << pushConst2M.isOutsideLight << std::endl;
+      vkCmdPushConstants(a_cmdBuff, m_resolvePipeline.layout, stageFlags, 0,
+                         sizeof(pushConst2M), &pushConst2M);
 
-    vkCmdDraw(a_cmdBuff, 3, 1, 0, 0);
+      auto mesh_info = m_pScnMgr->GetMeshInfo(m_pScnMgr->GetLightMeshId());
+      vkCmdDrawIndexed(a_cmdBuff, mesh_info.m_indNum, 1, mesh_info.m_indexOffset, mesh_info.m_vertexOffset, 0);
+    }
 
     vkCmdEndRenderPass(a_cmdBuff);
   }
@@ -777,6 +810,16 @@ void SimpleRender::LoadScene(const char* path, bool transpose_inst_matrices)
 {
   m_pScnMgr->LoadSceneXML(path, transpose_inst_matrices);
 
+  std::vector<float3> lightPos = {
+    float3(0.0, 2.0, 1.0), 
+    float3(0.0, -1.0, 1.0),
+  };
+  std::vector<float> lightScale = {5, 2};
+  for (int i = 0; i < lightPos.size(); i++) {
+     m_pScnMgr->InstanceLight(lightPos[i], lightScale[i]);
+  }
+ 
+  
   CreateUniformBuffer();
   SetupSimplePipeline();
 
