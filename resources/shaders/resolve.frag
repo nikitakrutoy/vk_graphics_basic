@@ -31,7 +31,7 @@ void main()
 	vec4 albedo = texture(samplerAlbedo, uv);
 
     
-    gl_FragDepth = gl_FragCoord.z * params.isOutsideLight;
+    // gl_FragDepth = gl_FragCoord.z * params.isOutsideLight;
 
     // vec4 coord = params.mProjView * vec4(fragPos, 1.0f);
 
@@ -62,6 +62,7 @@ void main()
     // vec4 color2 = max(dot(N, lightDir2), 0.0f) * lightColor2;
     // vec4 color_lights = mix(color1, color2, 0.2f);
     float intensity = 1.f;
-    float attn = intensity / (1.f + 2.f / lightRadius * lightDist + lightDist * lightDist / (lightRadius * lightRadius));
+    float attn = clamp(1.0 - lightDist*lightDist/(lightRadius*lightRadius), 0.0, 1.0); 
+    attn *= attn;
     outFragcolor = color1 * albedo * attn;
 }

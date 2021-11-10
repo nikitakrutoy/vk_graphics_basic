@@ -304,7 +304,7 @@ void SimpleRender::InitPresentation(VkSurfaceKHR &a_surface)
 
   SetupOffscreenFramebuffer();
 
-  m_frameBuffers = vk_utils::createFrameBuffers(m_device, m_swapchain, m_screenRenderPass, m_offScreenFrameBuf.depth.view);
+  m_frameBuffers = vk_utils::createFrameBuffers(m_device, m_swapchain, m_screenRenderPass, m_depthBuffer.view);
   m_pGUIRender = std::make_shared<ImGuiRender>(m_instance, m_device, m_physicalDevice, m_queueFamilyIDXs.graphics, m_graphicsQueue, m_swapchain);
 }
 
@@ -422,7 +422,7 @@ void SimpleRender::SetupSimplePipeline()
   blend.dstAlphaBlendFactor = VK_BLEND_FACTOR_DST_ALPHA;
   maker.colorBlending.attachmentCount = 1;
   maker.colorBlending.pAttachments = &blend;
-  maker.rasterizer.cullMode = VK_CULL_MODE_NONE;
+  maker.rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
   maker.depthStencilTest.depthTestEnable = true;
   maker.depthStencilTest.depthWriteEnable = false;
 
