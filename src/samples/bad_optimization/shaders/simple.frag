@@ -20,14 +20,7 @@ layout(binding = 0, set = 0) uniform AppData
 };
 
 float fog_density(float z) {
-    float dens = 0;
-    for (int i = 0; i < 10000; ++i) {
-        if (i / 100.0 > z) {
-            break;
-        }
-        dens += 0.0003;
-    }
-    return dens;
+    return min(0.03 * z, 3);
 }
 
 void main()
@@ -51,22 +44,14 @@ void main()
     vec4 color_lights = mix(color1, color2, 0.2f);
 
     vec3 time_dependent_color = vec3(0, 0, 0);
-    if (N.y > 0.5) {
-        time_dependent_color = vec3(sin(Params.time) * 0.1 + 0.1, max(sin(Params.time * 1.231) - 0.99, 0) / 0.01 * 0.3, -sin(Params.time) * 0.1 + 0.1);
-    } else {
-        time_dependent_color = vec3(-cos(Params.time + 3.14 / 2.0) * 0.1 + 0.1, max(sin(Params.time * 1.231) - 0.99, 0) / 0.01 * 0.3, cos(Params.time + 3.14 / 2.0) * 0.1 + 0.1);
-    }
-    if (N.x < 0) {
-        for (int i = 0; i < 300; ++i) {
-            time_dependent_color.x += 1.0 / pow(max(fract(Params.time), 3.0 + i), 7000);
-        }
-    } else {
-        for (int i = 0; i < 400; ++i) {
-            time_dependent_color.x += 1.0 / pow(max(fract(Params.time + 30) - 0.3, 64.0 + i), 4000);
-        }
+    time_dependent_color = vec3(sin(Params.time) * 0.1 + 0.1, max(sin(Params.time * 1.231) - 0.99, 0) * 0.003, -sin(Params.time) * 0.1 + 0.1);
+
+    float c = max(abs(fract(surf.wPos.x) - 0.5), max(abs(fract(surf.wPos.y) - 0.5), abs(fract(surf.wPos).z) - 0.5)) * 2.0;
+    for (int i = 0; i < 5; i++) {
+        c *= c;
     }
 
-    time_dependent_color *= pow(max(abs(fract(surf.wPos.x) - 0.5), max(abs(fract(surf.wPos.y) - 0.5), abs(fract(surf.wPos).z) - 0.5)) * 2.0, 30);
+    time_dependent_color *= c;
 
     vec3 screenFog = mix(vec3(1, 0, 0), vec3(0, 0, 1), gl_FragCoord.x / 1024) * fog_density(1 / gl_FragCoord.w);
 
