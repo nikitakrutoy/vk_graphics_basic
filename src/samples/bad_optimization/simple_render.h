@@ -18,7 +18,7 @@
 class SimpleRender : public IRender
 {
 public:
-  const std::string VERTEX_SHADER_PATH = "../resources/shaders/simple.vert";
+  const std::string VERTEX_SHADER_PATH = "../src/samples/bad_optimization/shaders/simple.vert";
   const std::string FRAGMENT_SHADER_PATH = "../src/samples/bad_optimization/shaders/simple.frag";
 
   SimpleRender(uint32_t a_width, uint32_t a_height);
@@ -97,10 +97,16 @@ protected:
   VkDeviceMemory m_uboAlloc = VK_NULL_HANDLE;
   void* m_uboMappedMem = nullptr;
 
+  VkBuffer m_models = VK_NULL_HANDLE;
+
   pipeline_data_t m_basicForwardPipeline {};
 
-  VkDescriptorSet m_dSet = VK_NULL_HANDLE;
-  VkDescriptorSetLayout m_dSetLayout = VK_NULL_HANDLE;
+  VkDescriptorSet m_dFragmentSet = VK_NULL_HANDLE;
+  VkDescriptorSetLayout m_dFragmentSetLayout = VK_NULL_HANDLE;
+
+  VkDescriptorSet m_dVertexSet = VK_NULL_HANDLE;
+  VkDescriptorSetLayout m_dVertexSetLayout = VK_NULL_HANDLE;
+
   VkRenderPass m_screenRenderPass = VK_NULL_HANDLE; // main renderpass
 
   std::shared_ptr<vk_utils::DescriptorMaker> m_pBindings = nullptr;

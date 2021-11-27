@@ -127,15 +127,34 @@ void SimpleRender::CreateDevice(uint32_t a_deviceId)
 void SimpleRender::SetupSimplePipeline()
 {
   std::vector<std::pair<VkDescriptorType, uint32_t> > dtypes = {
-      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,             1}
+      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,             1},
+      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,             1}
   };
 
+  std::vector<float4x4> models(m_pScnMgr->InstancesNum());
+  for (uint32_t i = 0; i < m_pScnMgr->InstancesNum(); ++i)
+  {
+    models[i] = m_pScnMgr->GetInstanceMatrix(i);
+  }
+ 
+  m_models = vk_utils::createBuffer(m_device, sizeof(float4x4) * models.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                                                       VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+  vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice, {m_models}, 0);
+
+  m_pScnMgr->GetCopyHelper()->UpdateBuffer(m_models, 0, models.data(), sizeof(float4x4) * models.size());
+
   if(m_pBindings == nullptr)
-    m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 1);
+    m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 2);
 
   m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT);
   m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-  m_pBindings->BindEnd(&m_dSet, &m_dSetLayout);
+
+  m_pBindings->BindEnd(&m_dFragmentSet, &m_dFragmentSetLayout);
+
+  m_pBindings->BindBegin(VK_SHADER_STAGE_VERTEX_BIT);
+  m_pBindings->BindBuffer(0, m_models, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+
+  m_pBindings->BindEnd(&m_dVertexSet, &m_dVertexSetLayout);
 
   // if we are recreating pipeline (for example, to reload shaders)
   // we need to cleanup old pipeline
@@ -158,7 +177,7 @@ void SimpleRender::SetupSimplePipeline()
 
   maker.LoadShaders(m_device, shader_paths);
 
-  m_basicForwardPipeline.layout = maker.MakeLayout(m_device, {m_dSetLayout}, sizeof(pushConst2M));
+  m_basicForwardPipeline.layout = maker.MakeLayout(m_device, {m_dFragmentSetLayout, m_dVertexSetLayout}, sizeof(pushConst2M));
   maker.SetDefaultState(m_width, m_height);
 
   m_basicForwardPipeline.pipeline = maker.MakePipeline(m_device, m_pScnMgr->GetPipelineVertexInputStateCreateInfo(),
@@ -230,8 +249,9 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
     vkCmdBeginRenderPass(a_cmdBuff, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, a_pipeline);
 
-    vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_basicForwardPipeline.layout, 0, 1,
-                            &m_dSet, 0, VK_NULL_HANDLE);
+    VkDescriptorSet sets[] = {m_dFragmentSet, m_dVertexSet};
+    vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_basicForwardPipeline.layout, 0, 2,
+                            sets, 0, VK_NULL_HANDLE);
 
     VkShaderStageFlags stageFlags = (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
@@ -242,17 +262,11 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
     vkCmdBindVertexBuffers(a_cmdBuff, 0, 1, &vertexBuf, &zero_offset);
     vkCmdBindIndexBuffer(a_cmdBuff, indexBuf, 0, VK_INDEX_TYPE_UINT32);
 
-    for (uint32_t i = 0; i < m_pScnMgr->InstancesNum(); ++i)
-    {
-      auto inst = m_pScnMgr->GetInstanceInfo(i);
-
-      pushConst2M.model = m_pScnMgr->GetInstanceMatrix(i);
-      vkCmdPushConstants(a_cmdBuff, m_basicForwardPipeline.layout, stageFlags, 0,
+    auto inst = m_pScnMgr->GetInstanceInfo(0);
+    auto mesh_info = m_pScnMgr->GetMeshInfo(inst.mesh_id);
+    vkCmdPushConstants(a_cmdBuff, m_basicForwardPipeline.layout, stageFlags, 0,
                          sizeof(pushConst2M), &pushConst2M);
-
-      auto mesh_info = m_pScnMgr->GetMeshInfo(inst.mesh_id);
-      vkCmdDrawIndexed(a_cmdBuff, mesh_info.m_indNum, 1, mesh_info.m_indexOffset, mesh_info.m_vertexOffset, 0);
-    }
+    vkCmdDrawIndexed(a_cmdBuff, mesh_info.m_indNum, m_pScnMgr->InstancesNum(), mesh_info.m_indexOffset, mesh_info.m_vertexOffset, 0);
 
     vkCmdEndRenderPass(a_cmdBuff);
   }
