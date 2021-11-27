@@ -179,6 +179,7 @@ void SimpleRender::SetupSimplePipeline()
 
   m_basicForwardPipeline.layout = maker.MakeLayout(m_device, {m_dFragmentSetLayout, m_dVertexSetLayout}, sizeof(pushConst2M));
   maker.SetDefaultState(m_width, m_height);
+  maker.rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
 
   m_basicForwardPipeline.pipeline = maker.MakePipeline(m_device, m_pScnMgr->GetPipelineVertexInputStateCreateInfo(),
                                                        m_screenRenderPass, {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR});
