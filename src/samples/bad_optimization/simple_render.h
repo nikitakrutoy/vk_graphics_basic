@@ -98,6 +98,7 @@ protected:
   void* m_uboMappedMem = nullptr;
 
   VkBuffer m_models = VK_NULL_HANDLE;
+  VkDeviceMemory m_modelsAlloc = VK_NULL_HANDLE;
 
   pipeline_data_t m_basicForwardPipeline {};
 

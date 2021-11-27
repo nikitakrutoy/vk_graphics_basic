@@ -139,7 +139,7 @@ void SimpleRender::SetupSimplePipeline()
  
   m_models = vk_utils::createBuffer(m_device, sizeof(float4x4) * models.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                                                        VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-  vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice, {m_models}, 0);
+  m_modelsAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice, {m_models}, 0);
 
   m_pScnMgr->GetCopyHelper()->UpdateBuffer(m_models, 0, models.data(), sizeof(float4x4) * models.size());
 
@@ -400,10 +400,22 @@ void SimpleRender::Cleanup()
     m_ubo = VK_NULL_HANDLE;
   }
 
+  if(m_models != VK_NULL_HANDLE)
+  {
+    vkDestroyBuffer(m_device, m_models, nullptr);
+    m_models = VK_NULL_HANDLE;
+  }
+
   if(m_uboAlloc != VK_NULL_HANDLE)
   {
     vkFreeMemory(m_device, m_uboAlloc, nullptr);
     m_uboAlloc = VK_NULL_HANDLE;
+  }
+
+    if(m_modelsAlloc != VK_NULL_HANDLE)
+  {
+    vkFreeMemory(m_device, m_modelsAlloc, nullptr);
+    m_modelsAlloc = VK_NULL_HANDLE;
   }
 
 //  vk_utils::deleteImg(m_device, &m_depthBuffer); // already deleted with swapchain
