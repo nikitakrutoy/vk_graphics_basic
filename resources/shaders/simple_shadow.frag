@@ -33,10 +33,24 @@ void main()
   const vec4 dark_violet = vec4(0.59f, 0.0f, 0.82f, 1.0f);
   const vec4 chartreuse  = vec4(0.5f, 1.0f, 0.0f, 1.0f);
 
-  vec4 lightColor1 = mix(dark_violet, chartreuse, abs(sin(Params.time)));
-  vec4 lightColor2 = vec4(1.0f, 1.0f, 1.0f, 1.0f);
+  vec4 lightColor1 = vec4(1.f);
    
-  vec3 lightDir   = normalize(Params.lightPos - surf.wPos);
-  vec4 lightColor = max(dot(surf.wNorm, lightDir), 0.0f) * lightColor1;
+  float lightDist = length(Params.lightPos - surf.wPos);
+  vec3 lightDir = normalize(Params.lightPos - surf.wPos);
+  vec3 LIGHT_DIR = normalize(Params.lightLookAt - Params.lightPos);
+  vec4 lightColor;
+  float theta = dot(lightDir, -LIGHT_DIR);
+  if (theta >= Params.lightInner)
+    lightColor = lightColor1;
+  else if (theta > Params.lightOuter) 
+    lightColor = lightColor1 * (theta - Params.lightOuter) / (Params.lightInner - Params.lightOuter);
+  else 
+    lightColor = vec4(0);
+
+  if (Params.lightRadius < lightDist)
+    lightColor = vec4(0);
+
+  lightColor = max(dot(surf.wNorm, lightDir), 0.0f) * lightColor;
+
   out_fragColor   = (lightColor*shadow + vec4(0.1f)) * vec4(Params.baseColor, 1.0f);
 }

@@ -4,6 +4,7 @@
 #define VK_NO_PROTOTYPES
 #include "../../render/scene_mgr.h"
 #include "../../render/render_common.h"
+#include "../../render/render_gui.h"
 #include "../../../resources/shaders/common.h"
 #include <geom/vk_mesh.h>
 #include <vk_descriptor_sets.h>
@@ -149,15 +150,18 @@ private:
   {
     ShadowMapCam() 
     {  
-      cam.pos    = float3(4.0f, 4.0f, 4.0f);
+      cam.pos    = float3(0.0f, 0.0f, 4.0f);
       cam.lookAt = float3(0, 0, 0);
       cam.up     = float3(0, 1, 0);
   
-      radius          = 5.0f;
+      radius          = 5.9f;
       lightTargetDist = 20.0f;
+      inner = 0.98;
+      outer = 0.96;
       usePerspectiveM = true;
     }
-
+    float inner;
+    float outer;
     float  radius;           ///!< ignored when usePerspectiveM == true 
     float  lightTargetDist;  ///!< identify depth range
     Camera cam;              ///!< user control for light to later get light worldViewProj matrix
@@ -166,6 +170,12 @@ private:
   } m_light;
  
   void DrawFrameSimple();
+
+  // *** GUI
+  std::shared_ptr<IRenderGUI> m_pGUIRender;
+  virtual void SetupGUIElements();
+  void DrawFrameWithGUI();
+  //
 
   void CreateInstance();
   void CreateDevice(uint32_t a_deviceId);
