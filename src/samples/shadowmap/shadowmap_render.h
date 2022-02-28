@@ -11,6 +11,7 @@
 #include <vk_images.h>
 #include <vk_swapchain.h>
 #include <vk_quad.h>
+#include "../../render/render_gui.h"
 
 #include <string>
 #include <iostream>
@@ -87,7 +88,17 @@ private:
   {
     float4x4 projView;
     float4x4 model;
+    uint32_t enableVSM = 1;
   } pushConst2M;
+
+  struct {
+    uint32_t width;
+    uint32_t height;
+    uint32_t enableBlur = 1;
+  } pushConstBlur;
+
+  bool m_enableBlur;
+  bool m_enableVSM;
 
   float4x4 m_worldViewProj;
   float4x4 m_lightMatrix;    
@@ -98,10 +109,13 @@ private:
   void* m_uboMappedMem = nullptr;
 
   pipeline_data_t m_basicForwardPipeline {};
+  pipeline_data_t m_blurPipeline {};
   pipeline_data_t m_shadowPipeline {};
 
   VkDescriptorSet m_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_dSetLayout = VK_NULL_HANDLE;
+  VkDescriptorSet m_dBlurSet = VK_NULL_HANDLE;
+  VkDescriptorSetLayout m_dBlurSetLayout = VK_NULL_HANDLE;
   VkRenderPass m_screenRenderPass = VK_NULL_HANDLE; // main renderpass
 
   std::shared_ptr<vk_utils::DescriptorMaker> m_pBindings = nullptr;
@@ -131,9 +145,13 @@ private:
   std::shared_ptr<vk_utils::IQuad>               m_pFSQuad;
   //std::shared_ptr<vk_utils::RenderableTexture2D> m_pShadowMap;
   std::shared_ptr<vk_utils::RenderTarget>        m_pShadowMap2;
+  std::shared_ptr<vk_utils::RenderTarget>        m_pBlur;
   uint32_t                                       m_shadowMapId = 0;
+  uint32_t                                       m_blurredMapId = 0;
+  VkSampler                                      m_blurSampler = VK_NULL_HANDLE;
   
   VkDeviceMemory        m_memShadowMap = VK_NULL_HANDLE;
+  VkDeviceMemory        m_memBlur = VK_NULL_HANDLE;
   VkDescriptorSet       m_quadDS; 
   VkDescriptorSetLayout m_quadDSLayout = nullptr;
 
@@ -187,6 +205,14 @@ private:
   void SetupDeviceFeatures();
   void SetupDeviceExtensions();
   void SetupValidationLayers();
+
+  // *** GUI
+  std::shared_ptr<IRenderGUI> m_pGUIRender;
+  virtual void SetupGUIElements();
+  void DrawFrameWithGUI();
+  //
+
+  void CreateShadowMapRenderPass(vk_utils::FbufAttachment depthAttachment, vk_utils::FbufAttachment depth2Attachment);
 };
 
 
