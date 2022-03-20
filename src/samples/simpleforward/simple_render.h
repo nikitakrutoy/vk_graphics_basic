@@ -39,6 +39,14 @@ public:
   void LoadScene(const char *path, bool transpose_inst_matrices) override;
   void DrawFrame(float a_time, DrawMode a_mode) override;
 
+  void LoadTexture(std::string& texturePath, vk_utils::VulkanImageMem& texture, VkSampler& sampler);
+  vk_utils::VulkanImageMem m_heightTexture {};
+  VkSampler m_heightTextureSampler = VK_NULL_HANDLE;
+  std::string m_heightTexturePath = "../resources/textures/height.png";
+  vk_utils::VulkanImageMem m_normalTexture {};
+  VkSampler m_normalTextureSampler = VK_NULL_HANDLE;
+  std::string m_normalTexturePath = "../resources/textures/normal.png";
+
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   // debugging utils
@@ -90,7 +98,16 @@ protected:
   {
     LiteMath::float4x4 projView;
     LiteMath::float4x4 model;
+    uint bVertexShadows;
+    uint bFragmentShadows;
+    uint bUseHeightMap;
+    uint bUseNormalMap; 
   } pushConst2M;
+
+  bool m_bVertexShadows = false;
+  bool m_bFragmentShadows = false;
+  bool m_bUseHeightMap = true;
+  bool m_bUseNormalMap = true;
 
   UniformParams m_uniforms {};
   VkBuffer m_ubo = VK_NULL_HANDLE;
@@ -123,6 +140,8 @@ protected:
   uint32_t m_height = 1024u;
   uint32_t m_framesInFlight  = 2u;
   bool m_vsync = false;
+
+  int m_terrain_id = 0;
 
   VkPhysicalDeviceFeatures m_enabledDeviceFeatures = {};
   std::vector<const char*> m_deviceExtensions      = {};

@@ -61,10 +61,70 @@ bool SceneManager::LoadSceneXML(const std::string &scenePath, bool transpose)
     m_sceneCameras.push_back(cam);
   }
 
+  AddTerrainMesh(8, float3(0, 0, 0), 10);
+
   LoadGeoDataOnGPU();
   hscene_main = nullptr;
 
   return true;
+}
+
+void SceneManager::MakeTerrain(cmesh::SimpleMesh& plane, int resolution) {
+
+    resolution += 1;
+    float step = 1.0f / resolution;
+    float offsetX = 0.5f;
+    float offsetZ = 0.5f;
+
+    for (int i = 0; i < resolution; ++i)
+    {
+        for (int j = 0; j < resolution; ++j)
+        {
+            plane.vPos4f.push_back(j * step - offsetX);
+            plane.vPos4f.push_back(0.0f);
+            plane.vPos4f.push_back(i * step - offsetZ);
+            plane.vPos4f.push_back(1.0f);
+
+            plane.vNorm4f.push_back(0.0f);
+            plane.vNorm4f.push_back(1.0f);
+            plane.vNorm4f.push_back(0.0f);
+            plane.vNorm4f.push_back(0.0f);
+
+            plane.vTexCoord2f.push_back((float)j * step);
+            plane.vTexCoord2f.push_back((float)i * step);
+        }
+    }
+
+    plane.vTang4f = std::vector<float>(plane.vPos4f.size(), 0);
+
+    auto to_index = [&](int i, int j){
+      return i * resolution + j;
+    };
+
+    for (int i = 0; i < resolution - 1; ++i)
+    {
+        for (int j = 0; j < resolution - 1; ++j)
+        {
+            plane.indices.push_back(to_index(i, j));
+            plane.indices.push_back(to_index(i, j + 1));
+            plane.indices.push_back(to_index(i + 1, j));
+
+            plane.indices.push_back(to_index(i + 1, j));
+            plane.indices.push_back(to_index(i + 1, j + 1));
+            plane.indices.push_back(to_index(i, j + 1));
+        }
+    }
+}
+
+void SceneManager::AddTerrainMesh(int resolution, float3 pos, float scale)
+{
+  cmesh::SimpleMesh plane = cmesh::SimpleMesh();
+  MakeTerrain(plane, resolution);
+  uint32_t mesh_id = AddMeshFromData(plane);
+  m_terrainMeshIds.push_back(mesh_id);
+
+  LiteMath::float4x4 m = LiteMath::translate4x4(pos) * LiteMath::scale4x4(float3(scale));
+  m_terrainInstanceMatrices.push_back(m);
 }
 
 hydra_xml::Camera SceneManager::GetCamera(uint32_t camId) const

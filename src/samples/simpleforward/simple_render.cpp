@@ -4,6 +4,7 @@
 #include <geom/vk_mesh.h>
 #include <vk_pipeline.h>
 #include <vk_buffers.h>
+#include "loader_utils/images.h"
 
 SimpleRender::SimpleRender(uint32_t a_width, uint32_t a_height) : m_width(a_width), m_height(a_height)
 {
@@ -128,14 +129,17 @@ void SimpleRender::CreateDevice(uint32_t a_deviceId)
 void SimpleRender::SetupSimplePipeline()
 {
   std::vector<std::pair<VkDescriptorType, uint32_t> > dtypes = {
-      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,             1}
+      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,             1},
+      {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1},
   };
 
   if(m_pBindings == nullptr)
     m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 1);
 
-  m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT);
+  m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
   m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+  m_pBindings->BindImage(1, m_heightTexture.view, m_heightTextureSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+  m_pBindings->BindImage(2, m_normalTexture.view, m_normalTextureSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
   m_pBindings->BindEnd(&m_dSet, &m_dSetLayout);
 
   // if we are recreating pipeline (for example, to reload shaders)
@@ -185,7 +189,7 @@ void SimpleRender::CreateUniformBuffer()
 
   vkMapMemory(m_device, m_uboAlloc, 0, sizeof(m_uniforms), 0, &m_uboMappedMem);
 
-  m_uniforms.lightPos = LiteMath::float3(0.0f, 1.0f, 1.0f);
+  m_uniforms.lightPos = LiteMath::float3(-1.0f, -1.0f, 0.0f);
   m_uniforms.baseColor = LiteMath::float3(0.9f, 0.92f, 1.0f);
   m_uniforms.animateLightColor = true;
 
@@ -197,6 +201,11 @@ void SimpleRender::UpdateUniformBuffer(float a_time)
 // most uniforms are updated in GUI -> SetupGUIElements()
   m_uniforms.time = a_time;
   memcpy(m_uboMappedMem, &m_uniforms, sizeof(m_uniforms));
+
+  pushConst2M.bVertexShadows = m_bVertexShadows;
+  pushConst2M.bFragmentShadows = m_bFragmentShadows;
+  pushConst2M.bUseHeightMap = m_bUseHeightMap;
+  pushConst2M.bUseNormalMap = m_bUseNormalMap;
 }
 
 void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebuffer a_frameBuff,
@@ -252,6 +261,15 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
                          sizeof(pushConst2M), &pushConst2M);
 
       auto mesh_info = m_pScnMgr->GetMeshInfo(inst.mesh_id);
+      vkCmdDrawIndexed(a_cmdBuff, mesh_info.m_indNum, 1, mesh_info.m_indexOffset, mesh_info.m_vertexOffset, 0);
+    }
+    {
+      uint32_t terrain_id = m_terrain_id;
+      pushConst2M.model = m_pScnMgr->GetTerrainInstanceMatrix(terrain_id);
+      vkCmdPushConstants(a_cmdBuff, m_basicForwardPipeline.layout, stageFlags, 0,
+                          sizeof(pushConst2M), &pushConst2M);
+
+      auto mesh_info = m_pScnMgr->GetTerrainMeshInfo(terrain_id);
       vkCmdDrawIndexed(a_cmdBuff, mesh_info.m_indNum, 1, mesh_info.m_indexOffset, mesh_info.m_vertexOffset, 0);
     }
 
@@ -453,7 +471,7 @@ void SimpleRender::UpdateView()
 {
   const float aspect   = float(m_width) / float(m_height);
   auto mProjFix        = OpenglToVulkanProjectionMatrixFix();
-  auto mProj           = projectionMatrix(m_cam.fov, aspect, 0.1f, 1000.0f);
+  auto mProj           = projectionMatrix(m_cam.fov, aspect, 0.1f, 2000.0f);
   auto mLookAt         = LiteMath::lookAt(m_cam.pos, m_cam.lookAt, m_cam.up);
   auto mWorldViewProj  = mProjFix * mProj * mLookAt;
   pushConst2M.projView = mWorldViewProj;
@@ -461,17 +479,28 @@ void SimpleRender::UpdateView()
 
 void SimpleRender::LoadScene(const char* path, bool transpose_inst_matrices)
 {
-  m_pScnMgr->LoadSceneXML(path, transpose_inst_matrices);
+
+  LoadTexture(m_heightTexturePath, m_heightTexture, m_heightTextureSampler);
+  LoadTexture(m_normalTexturePath, m_normalTexture, m_normalTextureSampler);
+  // m_pScnMgr->LoadSceneXML(path, transpose_inst_matrices);
+  m_pScnMgr->AddTerrainMesh(16, float3(0, 0, 0), 1000);
+  m_pScnMgr->AddTerrainMesh(32, float3(0, 0, 0), 1000);
+  m_pScnMgr->AddTerrainMesh(64, float3(0, 0, 0), 1000);
+  m_pScnMgr->AddTerrainMesh(128, float3(0, 0, 0), 1000);
+  m_pScnMgr->AddTerrainMesh(256, float3(0, 0, 0), 1000);
+
+  m_pScnMgr->LoadGeoDataOnGPU();
+
 
   CreateUniformBuffer();
   SetupSimplePipeline();
 
   auto loadedCam = m_pScnMgr->GetCamera(0);
   m_cam.fov = loadedCam.fov;
-  m_cam.pos = float3(loadedCam.pos);
+  m_cam.pos = float3(-500, 700, 500);
   m_cam.up  = float3(loadedCam.up);
   m_cam.lookAt = float3(loadedCam.lookAt);
-  m_cam.tdist  = loadedCam.farPlane;
+  m_cam.tdist  = loadedCam.farPlane * 10;
 
   UpdateView();
 
@@ -560,7 +589,12 @@ void SimpleRender::SetupGUIElements()
 
     ImGui::ColorEdit3("Meshes base color", m_uniforms.baseColor.M, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
     ImGui::Checkbox("Animate light source color", &m_uniforms.animateLightColor);
-    ImGui::SliderFloat3("Light source position", m_uniforms.lightPos.M, -10.f, 10.f);
+    ImGui::SliderFloat3("Light source direction", m_uniforms.lightPos.M, -1.f, 1.f);
+    ImGui::Checkbox("Compute shadows in vertex shader", &m_bVertexShadows);
+    ImGui::Checkbox("Compute shadows in frgament shader", &m_bFragmentShadows);
+    ImGui::Checkbox("Use texture (true) or noise for heightmap", &m_bUseHeightMap);
+    ImGui::Checkbox("Use texture (true) or compute normals from heightmap", &m_bUseNormalMap);
+    ImGui::SliderInt("Terrain Resolution", &m_terrain_id, 0, m_pScnMgr->GetTerrainResolutionNum() - 1);
 
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 
@@ -575,6 +609,36 @@ void SimpleRender::SetupGUIElements()
 
   // Rendering
   ImGui::Render();
+}
+
+void SimpleRender::LoadTexture(std::string& texturePath, vk_utils::VulkanImageMem& texture, VkSampler& sampler)
+{
+  int w, h, channels;
+  auto pixels = loadImageLDR(texturePath.c_str(), w, h, channels);
+
+  if(pixels == nullptr)
+  {
+    std::stringstream ss;
+    ss << "Failed loading texture from " << texturePath;
+    vk_utils::logWarning(ss.str());
+    return;
+  }
+
+  // in this sample we simply reallocate memory every time
+  // in more practical scenario you would try to reuse the same memory
+  // or even better utilize some sort of allocator
+  vk_utils::deleteImg(m_device, &texture);
+  if(sampler != VK_NULL_HANDLE) {
+    vkDestroySampler(m_device, sampler, VK_NULL_HANDLE);
+  }
+
+  int mipLevels = 1;
+  texture = allocateColorTextureFromDataLDR(m_device, m_physicalDevice, pixels, w, h, mipLevels,
+           VK_FORMAT_R8G8B8A8_UNORM, m_pScnMgr->GetCopyHelper());
+  sampler = vk_utils::createSampler(m_device, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT,
+    VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK);
+
+  freeImageMemLDR(pixels);
 }
 
 void SimpleRender::DrawFrameWithGUI()

@@ -57,8 +57,16 @@ struct SceneManager
   LiteMath::float4x4 GetInstanceMatrix(uint32_t instId) const {assert(instId < m_instanceMatrices.size()); return m_instanceMatrices[instId];}
   LiteMath::Box4f GetSceneBbox() const {return sceneBbox;}
 
-private:
+  MeshInfo GetTerrainMeshInfo(uint32_t terrainId) const {assert(terrainId < m_terrainMeshIds.size()); return m_meshInfos[m_terrainMeshIds[terrainId]];}
+  size_t GetTerrainResolutionNum() {return m_terrainMeshIds.size();};
+  LiteMath::float4x4 GetTerrainInstanceMatrix(uint32_t terrainId) const {assert(terrainId < m_terrainMeshIds.size()); return m_terrainInstanceMatrices[terrainId];}
+
+  void MakeTerrain(cmesh::SimpleMesh& plane, int resolution);
+  void AddTerrainMesh(int resolution, float3 pos, float scale);
+  uint32_t InstanceTerrain(float3 pos, float scale);
   void LoadGeoDataOnGPU();
+private:
+  
 
   std::vector<MeshInfo> m_meshInfos = {};
   std::vector<LiteMath::Box4f> m_meshBboxes = {};
@@ -67,6 +75,9 @@ private:
   std::vector<InstanceInfo> m_instanceInfos = {};
   std::vector<LiteMath::Box4f> m_instanceBboxes = {};
   std::vector<LiteMath::float4x4> m_instanceMatrices = {};
+
+  std::vector<uint32_t> m_terrainMeshIds;
+  std::vector<LiteMath::float4x4> m_terrainInstanceMatrices;
 
   std::vector<hydra_xml::Camera> m_sceneCameras = {};
   LiteMath::Box4f sceneBbox;

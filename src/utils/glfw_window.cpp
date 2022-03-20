@@ -106,19 +106,19 @@ void UpdateCamera(GLFWwindow* a_window, Camera& a_cam, float secondsElapsed)
 {
   //move position of camera based on WASD keys, and FR keys for up and down
   if (glfwGetKey(a_window, 'S'))
-    a_cam.offsetPosition(secondsElapsed * g_inputDesktop.camMoveSpeed * -1.0f * a_cam.forward());
+    a_cam.offsetPosition(secondsElapsed * g_inputDesktop.camMoveSpeed * -100.0f * a_cam.forward());
   else if (glfwGetKey(a_window, 'W'))
-    a_cam.offsetPosition(secondsElapsed * g_inputDesktop.camMoveSpeed * a_cam.forward());
+    a_cam.offsetPosition(secondsElapsed * g_inputDesktop.camMoveSpeed * 100.0f * a_cam.forward());
 
   if (glfwGetKey(a_window, 'A'))
-    a_cam.offsetPosition(secondsElapsed * g_inputDesktop.camMoveSpeed * -1.0f * a_cam.right());
+    a_cam.offsetPosition(secondsElapsed * g_inputDesktop.camMoveSpeed * -100.0f * a_cam.right());
   else if (glfwGetKey(a_window, 'D'))
-    a_cam.offsetPosition(secondsElapsed * g_inputDesktop.camMoveSpeed * a_cam.right());
+    a_cam.offsetPosition(secondsElapsed * g_inputDesktop.camMoveSpeed * 100.0f * a_cam.right());
 
   if (glfwGetKey(a_window, 'F'))
-    a_cam.offsetPosition(secondsElapsed * g_inputDesktop.camMoveSpeed * -1.0f * a_cam.up);
+    a_cam.offsetPosition(secondsElapsed * g_inputDesktop.camMoveSpeed * -100.0f * a_cam.up);
   else if (glfwGetKey(a_window, 'R'))
-    a_cam.offsetPosition(secondsElapsed * g_inputDesktop.camMoveSpeed * a_cam.up);
+    a_cam.offsetPosition(secondsElapsed * g_inputDesktop.camMoveSpeed * 100.0f * a_cam.up);
 
   //rotate camera based on mouse movement
   //
