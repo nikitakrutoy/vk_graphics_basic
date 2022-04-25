@@ -91,6 +91,8 @@ protected:
   {
     LiteMath::float4x4 projView;
     LiteMath::float4x4 model;
+    int32_t type = 0;
+    float white_point = 1;
   } pushConst2M;
 
   UniformParams m_uniforms {};
