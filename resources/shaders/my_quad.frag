@@ -12,5 +12,7 @@ layout (location = 0 ) in VS_OUT
 
 void main()
 {
-  color = textureLod(colorTex, surf.texCoord, 0);
+  vec2 uv = surf.texCoord;
+  uv.y = uv.y + 1;
+  color = textureLod(colorTex, uv, 0);
 }

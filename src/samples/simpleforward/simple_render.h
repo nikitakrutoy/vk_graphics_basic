@@ -12,6 +12,7 @@
 #include <vk_fbuf_attachment.h>
 #include <vk_images.h>
 #include <vk_swapchain.h>
+#include <vk_quad.h>
 #include <string>
 #include <iostream>
 
@@ -101,7 +102,16 @@ protected:
 
   VkDescriptorSet m_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_dSetLayout = VK_NULL_HANDLE;
+  VkDescriptorSet m_quadDS = VK_NULL_HANDLE;
+  VkDescriptorSetLayout m_quadDSLayout = VK_NULL_HANDLE;
   VkRenderPass m_screenRenderPass = VK_NULL_HANDLE; // main renderpass
+  VkRenderPass m_offscreenRenderPass = VK_NULL_HANDLE; 
+   // main renderpass
+
+  vk_utils::VulkanImageMem m_image;
+  VkSampler m_sampler;
+
+   std::shared_ptr<vk_utils::IQuad>               m_pFSQuad;
 
   std::shared_ptr<vk_utils::DescriptorMaker> m_pBindings = nullptr;
 
@@ -109,6 +119,7 @@ protected:
   VkSurfaceKHR m_surface = VK_NULL_HANDLE;
   VulkanSwapChain m_swapchain;
   std::vector<VkFramebuffer> m_frameBuffers;
+  VkFramebuffer m_offscreenFrameBuffer;
   vk_utils::VulkanImageMem m_depthBuffer{};
   // ***
 
