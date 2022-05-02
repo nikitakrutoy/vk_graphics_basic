@@ -192,6 +192,13 @@ void SimpleRender::CreateUniformBuffer()
   m_uniforms.lightPos = LiteMath::float3(-1.0f, -1.0f, 0.0f);
   m_uniforms.baseColor = LiteMath::float3(0.9f, 0.92f, 1.0f);
   m_uniforms.animateLightColor = true;
+  m_uniforms.fogHeight = 30;
+  m_uniforms.fogDensity = 50;
+  m_uniforms.fogStep = 10;
+  m_uniforms.fogStepNum = 64;
+  m_uniforms.fogShadowStepNum = 2;
+  m_uniforms.enableFog = true;
+  m_uniforms.fogColor = LiteMath::float3(0.5f, 0.5f, 0.9f);
 
   UpdateUniformBuffer(0.0f);
 }
@@ -200,6 +207,8 @@ void SimpleRender::UpdateUniformBuffer(float a_time)
 {
 // most uniforms are updated in GUI -> SetupGUIElements()
   m_uniforms.time = a_time;
+  m_uniforms.screenWidth = m_width;
+  m_uniforms.screenHeight = m_height;
   memcpy(m_uboMappedMem, &m_uniforms, sizeof(m_uniforms));
 
   pushConst2M.bVertexShadows = m_bVertexShadows;
@@ -604,6 +613,21 @@ void SimpleRender::SetupGUIElements()
     ImGui::Text("Changing bindings is not supported.");
     ImGui::Text("Vertex shader path: %s", VERTEX_SHADER_PATH.c_str());
     ImGui::Text("Fragment shader path: %s", FRAGMENT_SHADER_PATH.c_str());
+    ImGui::End();
+  }
+
+  ImGui::SetNextWindowSize(ImVec2(400, 250));
+  {
+    ImGui::Begin("Fog settings");
+
+    ImGui::Checkbox("Enabled", &m_uniforms.enableFog);
+    ImGui::SliderFloat("Fog Height", &m_uniforms.fogHeight, 0, 100);
+    ImGui::SliderFloat("Fog Density", &m_uniforms.fogDensity, 0, 100);
+    ImGui::SliderFloat("Fog Step", &m_uniforms.fogStep, 0, 100);
+    ImGui::SliderFloat("Fog Step Num", &m_uniforms.fogStepNum, 4, 512);
+    ImGui::SliderInt("Fog Shadow Step Num", &m_uniforms.fogShadowStepNum, 1, 100);
+    ImGui::ColorEdit3("Meshes base color", m_uniforms.fogColor.M, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
+    
     ImGui::End();
   }
 

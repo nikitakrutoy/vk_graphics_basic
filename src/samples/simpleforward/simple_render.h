@@ -105,9 +105,9 @@ protected:
   } pushConst2M;
 
   bool m_bVertexShadows = false;
-  bool m_bFragmentShadows = false;
-  bool m_bUseHeightMap = true;
-  bool m_bUseNormalMap = true;
+  bool m_bFragmentShadows = true;
+  bool m_bUseHeightMap = false;
+  bool m_bUseNormalMap = false;
 
   UniformParams m_uniforms {};
   VkBuffer m_ubo = VK_NULL_HANDLE;
@@ -141,7 +141,7 @@ protected:
   uint32_t m_framesInFlight  = 2u;
   bool m_vsync = false;
 
-  int m_terrain_id = 0;
+  int m_terrain_id = 3;
 
   VkPhysicalDeviceFeatures m_enabledDeviceFeatures = {};
   std::vector<const char*> m_deviceExtensions      = {};

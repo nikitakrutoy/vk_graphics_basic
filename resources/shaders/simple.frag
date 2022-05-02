@@ -33,6 +33,21 @@ layout(push_constant) uniform params_t
     uint bUseNormalMap;
 } params;
 
+mat4 invViewProj = inverse(params.mProjView);
+
+vec4 screenToWorld(vec2 pos, float depth)
+{
+    const vec4 sPos = vec4(2.0 * pos - 1.0, depth, 1.0);
+    const vec4 wPos = invViewProj * sPos;
+    return wPos / wPos.w;
+}
+
+float fogDensity(vec3 pos)
+{
+    float max_height = Params.fogHeight;
+    float height_mult = clamp(exp(-pos.y / max_height) , 0, 1);
+    return clamp(((cnoise(pos /  Params.fogDensity  + vec3(Params.time, 0, Params.time) / 1) + 1) /2) * 0.03f, 0, 1) * height_mult;
+}
 
 void main()
 {
@@ -50,31 +65,39 @@ void main()
 
     float width = 512;
     float stepXZ = 1 / width;
-    float step = 0.1 * 50;
-    vec3 dir = lightDir1;
+    float stepShadow = 0.1 * 50;
+    vec3 dirLight = lightDir1;
     
 
     if (params.bFragmentShadows == 1) {
         if (params.bUseHeightMap == 1) {
-            vec2 ray_pos = surf.texCoord;
+            vec2 rayPos = surf.texCoord;
             float height = textureLod(heightTex, surf.texCoord, 0).x * multiplier;
             float ray_height = height;
-            while (length(dir.xz) > 0.1 && all(lessThan(ray_pos, vec2(1))) && all(greaterThan(ray_pos, vec2(0)))) {
-                ray_pos -= stepXZ * dir.xz;
-                ray_height -= dir.y;
-                float height2 = textureLod(heightTex, ray_pos, 0).x * multiplier;
+            while (length(dirLight.xz) > 0.1 && all(lessThan(rayPos, vec2(1))) && all(greaterThan(rayPos, vec2(0)))) {
+                rayPos -= stepXZ * dirLight.xz;
+                ray_height -= dirLight.y;
+                float height2 = textureLod(heightTex, rayPos, 0).x * multiplier;
                 if (height2 - ray_height > 0.0) {
                     shadow = 0.0;
                     break;
                 }
             }
         } else {
-            vec3 ray_pos = surf.wPos;    
-            while (length(dir.xz) > 0.1 && all(lessThan(ray_pos.xz, vec2(scale))) && all(greaterThan(ray_pos.xz, vec2(-scale)))) {
-                ray_pos -= step * dir;
-                float height2 = noise(ray_pos.xz / divider) * multiplier;
-                if (height2 - ray_pos.y > 0.0) {
-                    shadow = 0.0;
+            vec3 rayPos = surf.wPos;  
+            shadow = 1;  
+            dirLight.z = -dirLight.z;
+            while (length(dirLight.xz) > 0.1 && all(lessThan(rayPos.xz, vec2(scale))) && all(greaterThan(rayPos.xz, vec2(-scale)))) {
+                rayPos -= stepShadow * dirLight;
+                float height2 = noise(rayPos.xz / divider) * multiplier;
+                if (height2 - rayPos.y > 0.0) {
+                    shadow = 0.1;
+                    break;
+                }
+                if (Params.enableFog)
+                    shadow *= exp(-fogDensity(rayPos) * stepShadow);
+                if (shadow < 0.0001f)
+                {
                     break;
                 }
             }
@@ -90,11 +113,59 @@ void main()
     vec3 N = surf.wNorm; 
 
     vec4 color1 = max(dot(N, lightDir1), 0.0f) * lightColor1;
-    // color1 = lightColor1;
-    // vec4 color2 = max(dot(N, lightDir2), 0.0f) * lightColor2;
-    // vec4 color_lights = mix(color1, color2, 0.2f);
 
     out_fragColor = color1 * vec4(Params.baseColor.xyz, 1.0f) * shadow;
-    // out_fragColor = vec4(N, 1.0);
-    // out_fragColor = vec4(fract(surf.wPos / 100), 1.0);
+
+    if (!Params.enableFog) return;
+
+    // Fog
+
+    const vec2 fragPos = gl_FragCoord.xy / vec2(Params.screenWidth, Params.screenHeight);
+
+    const vec4 wCamPos = screenToWorld(vec2(0.5), 0);
+    vec3 surfPos = surf.wPos;
+    vec3 dirFog = normalize(surfPos - wCamPos.xyz);
+
+    vec3 pos = screenToWorld(fragPos.xy, 0).xyz;
+
+    float stepFog = Params.fogStep;
+    float translucency = 1;
+    vec3 fogColor = vec3(0);
+
+    const vec4 baseFogColor = vec4(Params.fogColor, 0.);
+
+    stepShadow = 40;
+
+    for (uint i = 0; i < Params.fogStepNum; ++i)
+    {
+        vec3 rayPos = pos;  
+        shadow = 1;  
+        // while (length(dirLight.xz) > 0.1 && all(lessThan(rayPos.xz, vec2(scale + 50))) && all(greaterThan(rayPos.xz, vec2(-scale)))) {
+        for (uint i = 0; i < Params.fogShadowStepNum; ++i) {
+            rayPos -= stepShadow * dirLight;
+            float height2 = noise(rayPos.xz / divider) * multiplier;
+            if (height2 - rayPos.y > 0.0) {
+                shadow = 0.1;
+                break;
+            }
+            shadow *= exp(-fogDensity(rayPos) * stepShadow);
+            if (shadow < 0.0001f)
+            {
+                break;
+            }
+        }
+
+        float beersTerm = exp(-fogDensity(pos) * stepFog);
+        fogColor += translucency * baseFogColor.xyz * shadow * (1 - beersTerm) * 0.5f;
+
+        translucency *=  beersTerm;
+        // translucency *= exp(-(fogDensity(pos)*stepFog));
+        if (dot(pos, dirFog) > dot(surfPos, dirFog) || translucency < 0.0001f)
+        {
+            break;
+        }
+        pos += dirFog * stepFog;
+    }
+
+    out_fragColor = vec4((translucency * out_fragColor.xyz + fogColor), 1);
 }
