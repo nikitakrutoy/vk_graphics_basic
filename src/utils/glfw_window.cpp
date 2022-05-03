@@ -53,10 +53,14 @@ void onKeyboardPressedBasic(GLFWwindow* window, int key, int, int action, int)
     default:
       if(key >= 0 && key < AppInput::MAXKEYS)
       {
-        if (action == GLFW_RELEASE)
+        if (action == GLFW_RELEASE) {
           g_appInput.keyReleased[key] = true;
-        else if(action == GLFW_PRESS)
+          g_appInput.keyPressed[key] = false;
+        }
+        else if(action == GLFW_PRESS) {
+          g_appInput.keyReleased[key] = false;
           g_appInput.keyPressed[key] = true;
+        }
       }
       break;
   }
@@ -198,7 +202,7 @@ void mainLoop(std::shared_ptr<IRender> &app, GLFWwindow* window, bool displayGUI
     double diffTime = thisTime - lastTime;
     lastTime        = thisTime;
     
-    g_appInput.clearKeys();
+    // g_appInput.clearKeys();
     glfwPollEvents();
     
     if(g_appInput.keyReleased[GLFW_KEY_L])

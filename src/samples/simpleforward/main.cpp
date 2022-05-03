@@ -33,7 +33,7 @@ int main()
   constexpr int HEIGHT = 1024;
   constexpr int VULKAN_DEVICE_ID = 0;
 
-  bool showGUI = true;
+  bool showGUI = false;
 
   std::shared_ptr<IRender> app = CreateRender(WIDTH, HEIGHT, RenderEngineType::SIMPLE_FORWARD);
 //  std::shared_ptr<IRender> app = CreateRender(WIDTH, HEIGHT, RenderEngineType::SIMPLE_TEXTURE);

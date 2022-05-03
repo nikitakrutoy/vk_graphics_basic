@@ -5,6 +5,13 @@
 #include <vk_pipeline.h>
 #include <vk_buffers.h>
 
+#include <iostream>
+#include <fstream>
+#include <string>
+
+#include "loader_utils/images.h"
+
+
 SimpleRender::SimpleRender(uint32_t a_width, uint32_t a_height) : m_width(a_width), m_height(a_height)
 {
 #ifdef NDEBUG
@@ -28,6 +35,36 @@ void SimpleRender::SetupValidationLayers()
 {
   m_validationLayers.push_back("VK_LAYER_KHRONOS_validation");
   m_validationLayers.push_back("VK_LAYER_LUNARG_monitor");
+}
+
+void SimpleRender::LoadTexture(std::string& texturePath, vk_utils::VulkanImageMem& texture, VkSampler& sampler)
+{
+  int w, h, channels;
+  auto pixels = loadImageLDR(texturePath.c_str(), w, h, channels);
+
+  if(pixels == nullptr)
+  {
+    std::stringstream ss;
+    ss << "Failed loading texture from " << texturePath;
+    vk_utils::logWarning(ss.str());
+    return;
+  }
+
+  // in this sample we simply reallocate memory every time
+  // in more practical scenario you would try to reuse the same memory
+  // or even better utilize some sort of allocator
+  vk_utils::deleteImg(m_device, &texture);
+  if(sampler != VK_NULL_HANDLE) {
+    vkDestroySampler(m_device, sampler, VK_NULL_HANDLE);
+  }
+
+  int mipLevels = 1;
+  texture = allocateColorTextureFromDataLDR(m_device, m_physicalDevice, pixels, w, h, mipLevels,
+           VK_FORMAT_R8G8B8A8_UNORM, m_pScnMgr->GetCopyHelper());
+  sampler = vk_utils::createSampler(m_device, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT,
+    VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK);
+
+  freeImageMemLDR(pixels);
 }
 
 void SimpleRender::InitVulkan(const char** a_instanceExtensions, uint32_t a_instanceExtensionsCount, uint32_t a_deviceId)
@@ -127,8 +164,22 @@ void SimpleRender::CreateDevice(uint32_t a_deviceId)
 
 void SimpleRender::SetupSimplePipeline()
 {
+
+  // Создание и аллокация буферов
+  // m_sdfBuffer = vk_utils::createBuffer(m_device, sizeof(float) * 64 * 64 * 32, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+  //                                                                      VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+  // vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice, {m_sdfBuffer}, 0);
+
+  // m_pScnMgr->GetCopyHelper()->UpdateBuffer(m_sdfBuffer, 0, m_sdfValues.data(), sizeof(float) * m_sdfValues.size());
+
+  
+
+
+
   std::vector<std::pair<VkDescriptorType, uint32_t> > dtypes = {
-      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,             1}
+      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,             1},
+      // {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,             1}
+      {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1},
   };
 
   if(m_pBindings == nullptr)
@@ -136,6 +187,8 @@ void SimpleRender::SetupSimplePipeline()
 
   m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT);
   m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+  // m_pBindings->BindBuffer(1, m_sdfBuffer, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+  m_pBindings->BindImage(1, m_sdfTexture.view, m_sdfTextureSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
   m_pBindings->BindEnd(&m_dSet, &m_dSetLayout);
 
   // if we are recreating pipeline (for example, to reload shaders)
@@ -159,10 +212,15 @@ void SimpleRender::SetupSimplePipeline()
 
   maker.LoadShaders(m_device, shader_paths);
 
-  m_basicForwardPipeline.layout = maker.MakeLayout(m_device, {m_dSetLayout}, sizeof(pushConst2M));
+  m_basicForwardPipeline.layout = maker.MakeLayout(m_device, {m_dSetLayout}, sizeof(pushConstRot));
   maker.SetDefaultState(m_width, m_height);
 
-  m_basicForwardPipeline.pipeline = maker.MakePipeline(m_device, m_pScnMgr->GetPipelineVertexInputStateCreateInfo(),
+  VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
+  vertexInputInfo.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+  vertexInputInfo.vertexBindingDescriptionCount   = 0;
+  vertexInputInfo.vertexAttributeDescriptionCount = 0;  
+
+  m_basicForwardPipeline.pipeline = maker.MakePipeline(m_device, vertexInputInfo,
                                                        m_screenRenderPass, {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR});
 }
 
@@ -234,26 +292,33 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
     vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_basicForwardPipeline.layout, 0, 1,
                             &m_dSet, 0, VK_NULL_HANDLE);
 
+
     VkShaderStageFlags stageFlags = (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    vkCmdPushConstants(a_cmdBuff, m_basicForwardPipeline.layout, stageFlags, 0,
+                        sizeof(pushConstRot), &pushConstRot);
+
+    vkCmdDraw(a_cmdBuff, 3, 1, 0, 0);
 
     VkDeviceSize zero_offset = 0u;
-    VkBuffer vertexBuf = m_pScnMgr->GetVertexBuffer();
-    VkBuffer indexBuf = m_pScnMgr->GetIndexBuffer();
+    // VkBuffer vertexBuf = m_pScnMgr->GetVertexBuffer();
+    // VkBuffer indexBuf = m_pScnMgr->GetIndexBuffer();
 
-    vkCmdBindVertexBuffers(a_cmdBuff, 0, 1, &vertexBuf, &zero_offset);
-    vkCmdBindIndexBuffer(a_cmdBuff, indexBuf, 0, VK_INDEX_TYPE_UINT32);
+    // vkCmdBindVertexBuffers(a_cmdBuff, 0, 1, &vertexBuf, &zero_offset);
+    // vkCmdBindIndexBuffer(a_cmdBuff, indexBuf, 0, VK_INDEX_TYPE_UINT32);
 
-    for (uint32_t i = 0; i < m_pScnMgr->InstancesNum(); ++i)
-    {
-      auto inst = m_pScnMgr->GetInstanceInfo(i);
 
-      pushConst2M.model = m_pScnMgr->GetInstanceMatrix(i);
-      vkCmdPushConstants(a_cmdBuff, m_basicForwardPipeline.layout, stageFlags, 0,
-                         sizeof(pushConst2M), &pushConst2M);
 
-      auto mesh_info = m_pScnMgr->GetMeshInfo(inst.mesh_id);
-      vkCmdDrawIndexed(a_cmdBuff, mesh_info.m_indNum, 1, mesh_info.m_indexOffset, mesh_info.m_vertexOffset, 0);
-    }
+    // for (uint32_t i = 0; i < m_pScnMgr->InstancesNum(); ++i)
+    // {
+    //   auto inst = m_pScnMgr->GetInstanceInfo(i);
+
+    //   pushConst2M.model = m_pScnMgr->GetInstanceMatrix(i);
+    //   vkCmdPushConstants(a_cmdBuff, m_basicForwardPipeline.layout, stageFlags, 0,
+    //                      sizeof(pushConst2M), &pushConst2M);
+
+    //   auto mesh_info = m_pScnMgr->GetMeshInfo(inst.mesh_id);
+    //   vkCmdDrawIndexed(a_cmdBuff, mesh_info.m_indNum, 1, mesh_info.m_indexOffset, mesh_info.m_vertexOffset, 0);
+    // }
 
     vkCmdEndRenderPass(a_cmdBuff);
   }
@@ -421,14 +486,49 @@ void SimpleRender::ProcessInput(const AppInput &input)
 {
   // add keyboard controls here
   // camera movement is processed separately
+  float speed = 0.5;
+  if(input.keyPressed[GLFW_KEY_W]) {
+    pushConstRot.rotX += speed;
+  }
+  if(input.keyPressed[GLFW_KEY_S]) {
+    pushConstRot.rotX -= speed;
+  }
+  if(input.keyPressed[GLFW_KEY_A]) {
+    pushConstRot.rotY += speed;
+  }
+  if(input.keyPressed[GLFW_KEY_D]) {
+    pushConstRot.rotY -= speed;
+  }
+
+  if (input.keyPressed[GLFW_KEY_SPACE]) {
+    pushConstRot.draw_depth = 1;
+  }
+
+  if (input.keyReleased[GLFW_KEY_SPACE]) {
+    pushConstRot.draw_depth = 0;
+  }
+
+  if (input.keyPressed[GLFW_KEY_J]) {
+    pushConstRot.translate.y -= 0.5;
+  }
+  if (input.keyPressed[GLFW_KEY_L]) {
+    pushConstRot.translate.y += 0.5;
+  }
+  if (input.keyPressed[GLFW_KEY_I]) {
+    pushConstRot.translate.z -= 0.5;
+  }
+  if (input.keyPressed[GLFW_KEY_K]) {
+    pushConstRot.translate.z += 0.5;
+  }
+
 
   // recreate pipeline to reload shaders
   if(input.keyPressed[GLFW_KEY_B])
   {
 #ifdef WIN32
-    std::system("cd ../resources/shaders && python compile_simple_render_shaders.py");
+    std::system("cd ../resources/shaders && python compile_sdf_shaders.py");
 #else
-    std::system("cd ../resources/shaders && python3 compile_simple_render_shaders.py");
+    std::system("cd ../resources/shaders && python3 compile_sdf_shaders.py");
 #endif
 
     SetupSimplePipeline();
@@ -461,6 +561,7 @@ void SimpleRender::UpdateView()
 
 void SimpleRender::LoadScene(const char* path, bool transpose_inst_matrices)
 {
+  LoadTexture(m_sdfTexturePath, m_sdfTexture, m_sdfTextureSampler);
   m_pScnMgr->LoadSceneXML(path, transpose_inst_matrices);
 
   CreateUniformBuffer();
@@ -479,6 +580,16 @@ void SimpleRender::LoadScene(const char* path, bool transpose_inst_matrices)
   {
     BuildCommandBufferSimple(m_cmdBuffersDrawMain[i], m_frameBuffers[i],
                              m_swapchain.GetAttachment(i).view, m_basicForwardPipeline.pipeline);
+  }
+
+
+  std::string tmp;
+  std::ifstream myfile; myfile.open("../resources/sdf_data");
+  for (int i = 0; i < 64 * 32; i++) {
+    for (int j = 0; j < 64; j++) {
+      myfile >> tmp;
+      m_sdfValues.push_back(std::atof(tmp.c_str()) / 255.0);
+    }
   }
 }
 

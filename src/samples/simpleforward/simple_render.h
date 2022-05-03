@@ -18,8 +18,8 @@
 class SimpleRender : public IRender
 {
 public:
-  const std::string VERTEX_SHADER_PATH = "../resources/shaders/simple.vert";
-  const std::string FRAGMENT_SHADER_PATH = "../resources/shaders/simple.frag";
+  const std::string VERTEX_SHADER_PATH = "../resources/shaders/quad3_vert.vert";
+  const std::string FRAGMENT_SHADER_PATH = "../resources/shaders/quad.frag";
 
   SimpleRender(uint32_t a_width, uint32_t a_height);
   ~SimpleRender()  { Cleanup(); };
@@ -86,11 +86,22 @@ protected:
   std::vector<VkFence> m_frameFences;
   std::vector<VkCommandBuffer> m_cmdBuffersDrawMain;
 
+  std::vector<float> m_sdfValues;
+  VkBuffer m_sdfBuffer;
+
   struct
   {
     LiteMath::float4x4 projView;
     LiteMath::float4x4 model;
   } pushConst2M;
+
+  struct
+  {
+    float rotX = 0;
+    float rotY = 0;
+    int32_t draw_depth = 1;
+    LiteMath::float3 translate;
+  } pushConstRot;
 
   UniformParams m_uniforms {};
   VkBuffer m_ubo = VK_NULL_HANDLE;
@@ -153,6 +164,11 @@ protected:
   void SetupDeviceFeatures();
   void SetupDeviceExtensions();
   void SetupValidationLayers();
+
+  void LoadTexture(std::string& texturePath, vk_utils::VulkanImageMem& texture, VkSampler& sampler);
+  vk_utils::VulkanImageMem m_sdfTexture {};
+  VkSampler m_sdfTextureSampler = VK_NULL_HANDLE;
+  std::string m_sdfTexturePath = "../resources/sdf2.png";
 };
 
 
