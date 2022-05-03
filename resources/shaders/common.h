@@ -24,7 +24,15 @@ struct UniformParams
   mat4  lightMatrix;
   vec3  lightPos;
   float time;
+
   vec3  baseColor;
+  float maxStoreDist;
+  vec3 lightDir;
+  float maxTraceDist;
+  
+  float stepSize;
+  float thres;
+  int stepNum;
   bool animateLightColor;
 };
 

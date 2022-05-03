@@ -103,6 +103,9 @@ protected:
     LiteMath::float3 translate;
   } pushConstRot;
 
+  float m_cameraRotateSpeed = 0.2;
+  float m_cameraMoveSpeed = 0.2;
+
   UniformParams m_uniforms {};
   VkBuffer m_ubo = VK_NULL_HANDLE;
   VkDeviceMemory m_uboAlloc = VK_NULL_HANDLE;

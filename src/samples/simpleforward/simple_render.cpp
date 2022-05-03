@@ -247,6 +247,14 @@ void SimpleRender::CreateUniformBuffer()
   m_uniforms.baseColor = LiteMath::float3(0.9f, 0.92f, 1.0f);
   m_uniforms.animateLightColor = true;
 
+
+  m_uniforms.maxStoreDist = 10.0f;
+  m_uniforms.maxTraceDist = 50.0f;
+  m_uniforms.lightDir = LiteMath::normalize(LiteMath::float3(0.1f, -1.0f, -0.2f));
+  m_uniforms.stepSize = 0.01f;
+  m_uniforms.stepNum = 400;
+  m_uniforms.thres = 0.15f;
+
   UpdateUniformBuffer(0.0f);
 }
 
@@ -486,18 +494,17 @@ void SimpleRender::ProcessInput(const AppInput &input)
 {
   // add keyboard controls here
   // camera movement is processed separately
-  float speed = 0.5;
   if(input.keyPressed[GLFW_KEY_W]) {
-    pushConstRot.rotX += speed;
+    pushConstRot.rotX += m_cameraRotateSpeed;
   }
   if(input.keyPressed[GLFW_KEY_S]) {
-    pushConstRot.rotX -= speed;
+    pushConstRot.rotX -= m_cameraRotateSpeed;
   }
   if(input.keyPressed[GLFW_KEY_A]) {
-    pushConstRot.rotY += speed;
+    pushConstRot.rotY += m_cameraRotateSpeed;
   }
   if(input.keyPressed[GLFW_KEY_D]) {
-    pushConstRot.rotY -= speed;
+    pushConstRot.rotY -= m_cameraRotateSpeed;
   }
 
   if (input.keyPressed[GLFW_KEY_SPACE]) {
@@ -509,18 +516,24 @@ void SimpleRender::ProcessInput(const AppInput &input)
   }
 
   if (input.keyPressed[GLFW_KEY_J]) {
-    pushConstRot.translate.y -= 0.5;
+    pushConstRot.translate.y -= m_cameraMoveSpeed;
   }
   if (input.keyPressed[GLFW_KEY_L]) {
-    pushConstRot.translate.y += 0.5;
+    pushConstRot.translate.y += m_cameraMoveSpeed;
   }
   if (input.keyPressed[GLFW_KEY_I]) {
-    pushConstRot.translate.z -= 0.5;
+    pushConstRot.translate.z -= m_cameraMoveSpeed;
   }
   if (input.keyPressed[GLFW_KEY_K]) {
-    pushConstRot.translate.z += 0.5;
+    pushConstRot.translate.z += m_cameraMoveSpeed;
   }
-
+  
+  if (input.keyPressed[GLFW_KEY_O]) {
+    pushConstRot.translate.x -= m_cameraMoveSpeed;
+  }
+  if (input.keyPressed[GLFW_KEY_U]) {
+    pushConstRot.translate.x += m_cameraMoveSpeed;
+  }
 
   // recreate pipeline to reload shaders
   if(input.keyPressed[GLFW_KEY_B])
@@ -665,16 +678,25 @@ void SimpleRender::SetupGUIElements()
   ImGui_ImplVulkan_NewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
+
   {
-//    ImGui::ShowDemoWindow();
-    ImGui::Begin("Simple render settings");
+  //  ImGui::ShowDemoWindow();
+    ImGui::Begin("SDF Render Settings");
 
-    ImGui::ColorEdit3("Meshes base color", m_uniforms.baseColor.M, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
-    ImGui::Checkbox("Animate light source color", &m_uniforms.animateLightColor);
-    ImGui::SliderFloat3("Light source position", m_uniforms.lightPos.M, -10.f, 10.f);
+    ImGui::SliderFloat("Max stored distance", &m_uniforms.maxStoreDist, 0, 100);
+    ImGui::SliderFloat("Max trace distance", &m_uniforms.maxTraceDist, 0, 100);
+    ImGui::SliderFloat3("Light source direction", m_uniforms.lightDir.M, -1.f, 1.f);
+    ImGui::DragFloat("Trace Step Size", &m_uniforms.stepSize, 0.001, 0, 3,"%.3f");
+    ImGui::SliderInt("Trace Step Num", &m_uniforms.stepNum, 0, 1000);
+    ImGui::SliderFloat("Trace threshold", &m_uniforms.thres, 0, 1);
 
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+    ImGui::NewLine();
 
+    ImGui::Text("Camera Settings. WASD to Rotate. IJKL to Move.");
+    ImGui::DragFloat("Move Speed", &m_cameraMoveSpeed, 0.01, 0, 1,"%.2f");
+    ImGui::DragFloat("Rotate Speed", &m_cameraRotateSpeed, 0.01, 0, 1,"%.2f");
+
+    
     ImGui::NewLine();
 
     ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f),"Press 'B' to recompile and reload shaders");
