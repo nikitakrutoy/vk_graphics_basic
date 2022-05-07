@@ -6,7 +6,8 @@
 
 layout(push_constant) uniform params_t
 {
-    mat4 mProjView;
+    mat4 mProj;
+    mat4 mView;
     mat4 mModel;
     vec4 color;
     vec4 lightPos;

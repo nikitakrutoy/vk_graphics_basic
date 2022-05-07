@@ -10,7 +10,8 @@ layout(location = 1) in vec4 vTexCoordAndTang;
 
 layout(push_constant) uniform params_t
 {
-    mat4 mProjView;
+    mat4 mProj;
+    mat4 mView;
     mat4 mModel;
 } params;
 
@@ -35,5 +36,5 @@ void main(void)
     vOut.wTangent = normalize(mat3(transpose(inverse(params.mModel))) * wTang.xyz);
     vOut.texCoord = vTexCoordAndTang.xy;
 
-    gl_Position   = params.mProjView * vec4(vOut.wPos, 1.0);
+    gl_Position   = params.mProj * params.mView * vec4(vOut.wPos, 1.0);
 }

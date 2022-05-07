@@ -101,6 +101,7 @@ protected:
 	} m_offScreenFrameBuf;
 
   VkSampler m_colorSampler;
+  VkSampler m_depthSampler;
 
   std::vector<VkFence> m_frameFences;
   std::vector<VkCommandBuffer> m_cmdBuffersDrawMain;
@@ -108,7 +109,8 @@ protected:
 
   struct
   {
-    LiteMath::float4x4 projView;
+    LiteMath::float4x4 proj;
+    LiteMath::float4x4 view;
     LiteMath::float4x4 model;
     LiteMath::float4 color;
     LiteMath::float4 lightPos;
@@ -118,8 +120,13 @@ protected:
 
   UniformParams m_uniforms {};
   VkBuffer m_ubo = VK_NULL_HANDLE;
+  VkBuffer m_uboSSAOKernel = VK_NULL_HANDLE;
   VkDeviceMemory m_uboAlloc = VK_NULL_HANDLE;
+  VkDeviceMemory m_uboAllocSSAOKernel = VK_NULL_HANDLE;
   void* m_uboMappedMem = nullptr;
+  void* m_uboMappedMemSSAOKernel = nullptr;
+
+  std::vector<LiteMath::float3> m_ssaoKernel;
 
   pipeline_data_t m_basicForwardPipeline {};
   pipeline_data_t m_resolvePipeline {};

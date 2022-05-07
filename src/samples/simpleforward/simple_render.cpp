@@ -5,6 +5,8 @@
 #include <vk_pipeline.h>
 #include <vk_buffers.h>
 
+#include <random>
+
 void SimpleRender::SetupOffscreenFramebuffer() {
   m_offScreenFrameBuf.width = m_width;
   m_offScreenFrameBuf.height = m_height;
@@ -56,7 +58,7 @@ void SimpleRender::SetupOffscreenFramebuffer() {
     {
       attachmentDescs[i].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
       // attachmentDescs[i].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL ;
-      attachmentDescs[i].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL ;
+      attachmentDescs[i].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL ;
     }
     else
     {
@@ -149,6 +151,7 @@ void SimpleRender::SetupOffscreenFramebuffer() {
   sampler.maxLod = 1.0f;
   sampler.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
   VK_CHECK_RESULT(vkCreateSampler(m_device, &sampler, nullptr, &m_colorSampler));
+  VK_CHECK_RESULT(vkCreateSampler(m_device, &sampler, nullptr, &m_depthSampler));
 }
 
 void SimpleRender::CreateAttachment(
@@ -352,8 +355,8 @@ inline VkPipelineColorBlendAttachmentState pipelineColorBlendAttachmentState(
 void SimpleRender::SetupSimplePipeline()
 {
   std::vector<std::pair<VkDescriptorType, uint32_t> > dtypes = {
-      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,             1},
-      {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,     3}
+      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,             2},
+      {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,     4}
   };
 
   if(m_pBindings == nullptr)
@@ -367,6 +370,8 @@ void SimpleRender::SetupSimplePipeline()
   m_pBindings->BindImage(0, m_offScreenFrameBuf.position.view, m_colorSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   m_pBindings->BindImage(1, m_offScreenFrameBuf.normal.view, m_colorSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   m_pBindings->BindImage(2, m_offScreenFrameBuf.albedo.view, m_colorSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  m_pBindings->BindImage(3, m_offScreenFrameBuf.depth.view, m_depthSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  m_pBindings->BindBuffer(4, m_uboSSAOKernel, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
   m_pBindings->BindEnd(&m_dResolveSet, &m_dResolveSetLayout);
 
   // if we are recreating pipeline (for example, to reload shaders)
@@ -434,8 +439,10 @@ void SimpleRender::SetupSimplePipeline()
 
 void SimpleRender::CreateUniformBuffer()
 {
-  VkMemoryRequirements memReq;
+  VkMemoryRequirements memReq, memReq2;
   m_ubo = vk_utils::createBuffer(m_device, sizeof(UniformParams), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &memReq);
+  m_uboSSAOKernel = vk_utils::createBuffer(m_device, sizeof(LiteMath::float3) * 64, 
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, &memReq2);
 
   VkMemoryAllocateInfo allocateInfo = {};
   allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -451,9 +458,37 @@ void SimpleRender::CreateUniformBuffer()
 
   vkMapMemory(m_device, m_uboAlloc, 0, sizeof(m_uniforms), 0, &m_uboMappedMem);
 
+  allocateInfo.allocationSize = memReq2.size;
+  allocateInfo.memoryTypeIndex = vk_utils::findMemoryType(memReq2.memoryTypeBits,
+                                                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                                          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                                          m_physicalDevice);
+  VK_CHECK_RESULT(vkAllocateMemory(m_device, &allocateInfo, nullptr, &m_uboAllocSSAOKernel));
+
+  VK_CHECK_RESULT(vkBindBufferMemory(m_device, m_uboSSAOKernel, m_uboAllocSSAOKernel, 0));
+
+  vkMapMemory(m_device, m_uboAllocSSAOKernel, 0, sizeof(m_uniforms), 0, &m_uboMappedMemSSAOKernel);
+
   m_uniforms.lightPos = LiteMath::float3(0.0f, 1.0f, 1.0f);
   m_uniforms.baseColor = LiteMath::float3(0.9f, 0.92f, 1.0f);
   m_uniforms.animateLightColor = true;
+
+  std::uniform_real_distribution<float> randomFloats(0.0, 1.0); // random floats between [0.0, 1.0]
+  std::default_random_engine generator;
+
+  for (unsigned int i = 0; i < 64; ++i)
+  {
+      LiteMath::float3 sample(
+          randomFloats(generator) * 2.0 - 1.0, 
+          randomFloats(generator) * 2.0 - 1.0, 
+          randomFloats(generator)
+      );
+      sample  = LiteMath::normalize(sample);
+      sample *= randomFloats(generator);
+      m_ssaoKernel.push_back(sample);  
+  }
+
+  m_pScnMgr->GetCopyHelper()->UpdateBuffer(m_uboSSAOKernel, 0, m_ssaoKernel.data(), sizeof(LiteMath::float3) * 64);
 
   UpdateUniformBuffer(0.0f);
 }
@@ -784,6 +819,18 @@ void SimpleRender::Cleanup()
     m_uboAlloc = VK_NULL_HANDLE;
   }
 
+  if(m_uboSSAOKernel != VK_NULL_HANDLE)
+  {
+    vkDestroyBuffer(m_device, m_uboSSAOKernel, nullptr);
+    m_uboSSAOKernel = VK_NULL_HANDLE;
+  }
+
+  if(m_uboAllocSSAOKernel != VK_NULL_HANDLE)
+  {
+    vkFreeMemory(m_device, m_uboAllocSSAOKernel, nullptr);
+    m_uboAllocSSAOKernel = VK_NULL_HANDLE;
+  }
+
 //  vk_utils::deleteImg(m_device, &m_depthBuffer); // already deleted with swapchain
 
   if(m_depthBuffer.mem != VK_NULL_HANDLE)
@@ -855,7 +902,9 @@ void SimpleRender::UpdateView()
   auto mProj           = projectionMatrix(m_cam.fov, aspect, 0.1f, 1000.0f);
   auto mLookAt         = LiteMath::lookAt(m_cam.pos, m_cam.lookAt, m_cam.up);
   auto mWorldViewProj  = mProjFix * mProj * mLookAt;
-  pushConst2M.projView = mWorldViewProj;
+  // pushConst2M.projView = mWorldViewProj;
+  pushConst2M.proj = mProjFix * mProj;
+  pushConst2M.view = mLookAt;
 }
 
 void SimpleRender::LoadScene(const char* path, bool transpose_inst_matrices)
