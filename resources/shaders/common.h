@@ -19,13 +19,17 @@ typedef float2       vec2;
 typedef float4x4     mat4;
 #endif
 
+#define SSAO_KERNEL_SIZE 96
+
 struct UniformParams
 {
   mat4  lightMatrix;
   vec3  lightPos;
   float time;
   vec3  baseColor;
+  float radiusSSAO;
   bool animateLightColor;
+  uint32_t enableSSAO;
 };
 
 #endif //VK_GRAPHICS_BASIC_COMMON_H

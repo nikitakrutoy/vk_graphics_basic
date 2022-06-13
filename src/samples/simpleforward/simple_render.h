@@ -126,7 +126,7 @@ protected:
   void* m_uboMappedMem = nullptr;
   void* m_uboMappedMemSSAOKernel = nullptr;
 
-  std::vector<LiteMath::float3> m_ssaoKernel;
+  std::vector<LiteMath::float4> m_ssaoKernel;
 
   pipeline_data_t m_basicForwardPipeline {};
   pipeline_data_t m_resolvePipeline {};

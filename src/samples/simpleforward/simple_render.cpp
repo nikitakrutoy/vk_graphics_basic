@@ -372,6 +372,7 @@ void SimpleRender::SetupSimplePipeline()
   m_pBindings->BindImage(2, m_offScreenFrameBuf.albedo.view, m_colorSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   m_pBindings->BindImage(3, m_offScreenFrameBuf.depth.view, m_depthSampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   m_pBindings->BindBuffer(4, m_uboSSAOKernel, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+  m_pBindings->BindBuffer(5, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
   m_pBindings->BindEnd(&m_dResolveSet, &m_dResolveSetLayout);
 
   // if we are recreating pipeline (for example, to reload shaders)
@@ -441,7 +442,7 @@ void SimpleRender::CreateUniformBuffer()
 {
   VkMemoryRequirements memReq, memReq2;
   m_ubo = vk_utils::createBuffer(m_device, sizeof(UniformParams), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &memReq);
-  m_uboSSAOKernel = vk_utils::createBuffer(m_device, sizeof(LiteMath::float3) * 64, 
+  m_uboSSAOKernel = vk_utils::createBuffer(m_device, sizeof(float) * 4 * SSAO_KERNEL_SIZE, 
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, &memReq2);
 
   VkMemoryAllocateInfo allocateInfo = {};
@@ -475,20 +476,21 @@ void SimpleRender::CreateUniformBuffer()
 
   std::uniform_real_distribution<float> randomFloats(0.0, 1.0); // random floats between [0.0, 1.0]
   std::default_random_engine generator;
-
-  for (unsigned int i = 0; i < 64; ++i)
+  
+  for (unsigned int i = 0; i < SSAO_KERNEL_SIZE; ++i)
   {
-      LiteMath::float3 sample(
+      LiteMath::float4 sample(
           randomFloats(generator) * 2.0 - 1.0, 
           randomFloats(generator) * 2.0 - 1.0, 
-          randomFloats(generator)
+          randomFloats(generator),
+          0.0f
       );
       sample  = LiteMath::normalize(sample);
       sample *= randomFloats(generator);
       m_ssaoKernel.push_back(sample);  
   }
-
-  m_pScnMgr->GetCopyHelper()->UpdateBuffer(m_uboSSAOKernel, 0, m_ssaoKernel.data(), sizeof(LiteMath::float3) * 64);
+  m_pScnMgr->GetCopyHelper()->UpdateBuffer(m_uboSSAOKernel, 0, m_ssaoKernel.data() , sizeof(float) * 4 * SSAO_KERNEL_SIZE);
+  uint32_t offsetNum = 48;
 
   UpdateUniformBuffer(0.0f);
 }
@@ -618,8 +620,8 @@ void SimpleRender::BuildResolveCommandBuffer(VkCommandBuffer a_cmdBuff, VkFrameb
     VkShaderStageFlags stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT;
 
     for (int i = 0; i < m_pScnMgr->LightInstancesNum(); i++) {
-      pushConst2M.model = m_pScnMgr->GetLightInstanceMatrix(i);
-      pushConst2M.lightPos =  m_pScnMgr->GetLightInstancePos(i);
+      pushConst2M.model = pushConst2M.view * m_pScnMgr->GetLightInstanceMatrix(i);
+      pushConst2M.lightPos =  pushConst2M.view * m_pScnMgr->GetLightInstancePos(i);
       pushConst2M.isOutsideLight = LiteMath::length3(to_float4(m_cam.pos, 0.f) - pushConst2M.lightPos) >= pushConst2M.model[0][0];
       vkCmdPushConstants(a_cmdBuff, m_resolvePipeline.layout, stageFlags, 0,
                          sizeof(pushConst2M), &pushConst2M);
@@ -870,9 +872,9 @@ void SimpleRender::ProcessInput(const AppInput &input)
   if(input.keyPressed[GLFW_KEY_B])
   {
 #ifdef WIN32
-    std::system("cd ../resources/shaders && python compile_simple_render_shaders.py");
+    std::system("cd ../resources/shaders && python compile_deferred_shaders.py");
 #else
-    std::system("cd ../resources/shaders && python3 compile_simple_render_shaders.py");
+    std::system("cd ../resources/shaders && python3 compile_deferred_shaders.py");
 #endif
 
     SetupSimplePipeline();
@@ -912,10 +914,10 @@ void SimpleRender::LoadScene(const char* path, bool transpose_inst_matrices)
   m_pScnMgr->LoadSceneXML(path, transpose_inst_matrices);
 
   std::vector<float3> lightPos = {
-    float3(0.0, 2.0, 1.0), 
-    float3(0.0, -1.0, 1.0),
+    float3(0.0, 2.0, 1.0)
+    // float3(0.0, -1.0, 1.0),
   };
-  std::vector<float> lightScale = {5, 2};
+  std::vector<float> lightScale = {10};
   for (int i = 0; i < lightPos.size(); i++) {
      m_pScnMgr->InstanceLight(lightPos[i], lightScale[i]);
   }
@@ -1033,6 +1035,8 @@ void SimpleRender::SetupGUIElements()
 
     ImGui::ColorEdit3("Meshes base color", m_uniforms.baseColor.M, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
     ImGui::Checkbox("Animate light source color", &m_uniforms.animateLightColor);
+    ImGui::Checkbox("Enable SSAO", (bool*)&m_uniforms.enableSSAO);
+    ImGui::SliderFloat("SSAO radius", &m_uniforms.radiusSSAO, -10.f, 10.f);
     ImGui::SliderFloat3("Light source position", m_uniforms.lightPos.M, -10.f, 10.f);
 
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
